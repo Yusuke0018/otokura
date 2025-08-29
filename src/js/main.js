@@ -158,7 +158,7 @@ async function boot() {
     `).join('');
   }
 
-  async function playTrackById(id) {
+  async function loadTrackById(id, autoplay = false) {
     const tracks = await db.listTracks();
     const t = tracks.find(x => x.id === id);
     if (!t) return;
@@ -213,7 +213,11 @@ async function boot() {
     audio.onerror = () => {
       showError('再生に失敗しました。対応していない形式か破損の可能性があります。');
     };
-    await audio.play().catch(()=>{});
+    if (autoplay) {
+      await audio.play().catch(()=>{});
+    } else {
+      try { audio.pause(); } catch {}
+    }
     if (!window.__otokuraKeysBound) {
       window.__otokuraKeysBound = true;
       document.addEventListener('keydown', (e)=>{
@@ -233,7 +237,7 @@ async function boot() {
     const body = e.target.closest('.card-body');
     if (body && listEl.contains(body)){
       const li = body.closest('li[data-id]');
-      if (li) { const id = li.getAttribute('data-id'); playTrackById(id); return; }
+      if (li) { const id = li.getAttribute('data-id'); loadTrackById(id, false); return; }
     }
     const kebab = e.target.closest('[data-menu="toggle"]');
     if (kebab){
@@ -250,7 +254,7 @@ async function boot() {
     if (!li) return;
     const id = li.getAttribute('data-id');
     if (btn.dataset.action === 'play') {
-      playTrackById(id);
+      loadTrackById(id, true);
     } else if (btn.dataset.action === 'info') {
       handleInfo(id);
     } else if (btn.dataset.action === 'move') {
