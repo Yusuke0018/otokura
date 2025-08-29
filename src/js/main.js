@@ -2,7 +2,7 @@
 const v = new URL(import.meta.url).searchParams.get('v') || '0';
 
 async function boot() {
-  const [{ renderShell, toast, showError }, { storage }, { db }, metricsMod] = await Promise.all([
+  const [{ renderShell, toast, showError, promptModal }, { storage }, { db }, metricsMod] = await Promise.all([
     import(`./ui.js?v=${v}`),
     import(`./storage.js?v=${v}`),
     import(`./db.js?v=${v}`),
@@ -114,6 +114,7 @@ async function boot() {
         </div>
         <div>
           <button class="btn" data-action="play">再生</button>
+          <button class="btn" data-action="info">情報</button>
           <button class="btn" data-action="rename">名称変更</button>
           <button class="btn" data-action="delete">削除</button>
         </div>
@@ -177,6 +178,19 @@ async function boot() {
       showError('再生に失敗しました。対応していない形式か破損の可能性があります。');
     };
     await audio.play().catch(()=>{});
+    if (!window.__otokuraKeysBound) {
+      window.__otokuraKeysBound = true;
+      document.addEventListener('keydown', (e)=>{
+        if (!audio) return;
+        const el = e.target;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+        if (e.code === 'Space') { e.preventDefault(); if (audio.paused) audio.play().catch(()=>{}); else audio.pause(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); audio.currentTime = Math.max(0, (audio.currentTime||0) - 5); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); audio.currentTime = Math.min((audio.duration||0), (audio.currentTime||0) + 5); }
+        if (e.key === '[') { e.preventDefault(); playbackRate = Math.max(0.5, Math.round((playbackRate-0.25)*100)/100); audio.playbackRate = playbackRate; db.setSettings({ playbackRate }); }
+        if (e.key === ']') { e.preventDefault(); playbackRate = Math.min(3.0, Math.round((playbackRate+0.25)*100)/100); audio.playbackRate = playbackRate; db.setSettings({ playbackRate }); }
+      });
+    }
   }
 
   listEl.addEventListener('click', (e) => {
@@ -187,12 +201,33 @@ async function boot() {
     const id = li.getAttribute('data-id');
     if (btn.dataset.action === 'play') {
       playTrackById(id);
+    } else if (btn.dataset.action === 'info') {
+      handleInfo(id);
     } else if (btn.dataset.action === 'rename') {
       handleRename(id);
     } else if (btn.dataset.action === 'delete') {
       handleDelete(id);
     }
   });
+
+  async function handleInfo(id){
+    const tracks = await db.listTracks();
+    const t = tracks.find(x=>x.id===id);
+    if (!t) return;
+    const st = await db.getPlayStats(id);
+    const details = [
+      `名前: ${t.displayName || t.path}`,
+      `保存名: ${t.path}`,
+      `サイズ: ${t.size||0} bytes` ,
+      `長さ: ${t.durationMs?`${(t.durationMs/1000).toFixed(1)}s`:'(未取得)'}`,
+      `追加: ${new Date(t.addedAt||Date.now()).toLocaleString()}`,
+      `更新: ${new Date(t.updatedAt||t.addedAt||Date.now()).toLocaleString()}`,
+      `再生回数: ${st.playCount||0}`,
+      `最終再生: ${st.lastPlayedAt?new Date(st.lastPlayedAt).toLocaleString():'(なし)'}`,
+      `最終位置: ${st.lastPositionMs?`${(st.lastPositionMs/1000).toFixed(1)}s`:'0s'}`,
+    ].join('\n');
+    alert(details);
+  }
 
   function sanitizeTitle(name){
     return String(name||'').replace(/[\\/:*?"<>|\u0000-\u001F]/g,'_').trim().slice(0,128);
@@ -203,20 +238,22 @@ async function boot() {
     const t = tracks.find(x=>x.id===id);
     if (!t) return;
     const current = t.displayName || t.path || '';
-    const input = prompt('新しい名前を入力してください（拡張子不要）', current);
+    const input = await promptModal({ title: '名称変更', label: '新しい名前（拡張子不要）', value: current });
     if (input == null) return;
     const base = sanitizeTitle(input);
-    if (!base) { alert('名称が無効です。'); return; }
+    if (!base) { showError('名称が無効です。'); return; }
     const newFileName = `${base}.wav`;
     let newPath = t.path;
+    if (await storage.exists(newFileName)) { showError('同名のファイルが既に存在します。'); return; }
     try {
-      newPath = await storage.rename(t.path, newFileName) || t.path;
-    } catch {}
+      newPath = await storage.renameExact(t.path, newFileName) || t.path;
+    } catch { showError('名称変更に失敗しました。'); return; }
     await db.updateTrack(t.id, { displayName: base, path: newPath });
     if (currentId === id && audio) {
       // 再生中はそのまま、次回再生で新パスを使用
     }
     renderList(searchInput.value);
+    toast('名称を変更しました。');
   }
 
   async function handleDelete(id) {

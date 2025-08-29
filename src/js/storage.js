@@ -47,6 +47,22 @@ async function ensureUniqueName(name){
 }
 
 export const storage = {
+  async exists(name){
+    name = sanitize(name);
+    if (supportsOPFS){
+      const dir = await getDir();
+      try { await dir.getFileHandle(name, { create: false }); return true; } catch { return false; }
+    } else {
+      const db = await openDB();
+      return await new Promise((res)=>{
+        const tx = db.transaction('files', 'readonly');
+        const s = tx.objectStore('files');
+        const r = s.get(name);
+        r.onsuccess=()=>res(!!r.result);
+        r.onerror=()=>res(false);
+      });
+    }
+  },
   async saveFile(name, blob){
     const unique = await ensureUniqueName(name);
     if (supportsOPFS){
@@ -189,6 +205,52 @@ export const storage = {
           files.delete(oldName);
         };
         tx.oncomplete=()=>res(unique);
+        tx.onerror=()=>rej(tx.error);
+        tx.onabort=()=>rej(tx.error);
+      });
+    }
+  },
+  async renameExact(oldName, newName){
+    const target = sanitize(newName);
+    if (supportsOPFS){
+      const dir = await getDir();
+      // 存在チェック
+      try { await dir.getFileHandle(target, { create: false }); return null; } catch {}
+      const src = await dir.getFileHandle(oldName);
+      const dst = await dir.getFileHandle(target, { create: true });
+      const srcFile = await src.getFile();
+      const ws = await dst.createWritable();
+      await ws.write(srcFile);
+      await ws.close();
+      await dir.removeEntry(oldName);
+      return target;
+    } else {
+      const db = await openDB();
+      const exists = await new Promise((res)=>{
+        const tx = db.transaction('files', 'readonly');
+        const s = tx.objectStore('files');
+        const r = s.get(target); r.onsuccess=()=>res(!!r.result); r.onerror=()=>res(false);
+      });
+      if (exists) return null;
+      return await new Promise((res, rej)=>{
+        const tx = db.transaction(['files','fileChunks'], 'readwrite');
+        const files = tx.objectStore('files');
+        const chunks = tx.objectStore('fileChunks');
+        const g = files.get(oldName);
+        g.onsuccess = () => {
+          const v = g.result; if(!v){ res(null); return; }
+          if (v.chunked){
+            const range = IDBKeyRange.bound([oldName, 0], [oldName, v.chunks]);
+            const curReq = chunks.openCursor(range);
+            curReq.onsuccess = () => {
+              const c = curReq.result;
+              if (c){ const { idx, blob } = c.value; chunks.put({ name: target, idx, blob }); chunks.delete([oldName, idx]); c.continue(); }
+            };
+          }
+          files.put({ ...v, name: target });
+          files.delete(oldName);
+        };
+        tx.oncomplete=()=>res(target);
         tx.onerror=()=>rej(tx.error);
         tx.onabort=()=>rej(tx.error);
       });

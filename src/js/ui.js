@@ -18,6 +18,7 @@ export function renderShell(root){
     <ul id="trackList" class="list" aria-label="トラック一覧"></ul>
     <div id="player" class="player" aria-label="プレイヤー領域"></div>
     <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
+    <div id="modal-root" class="modal-root" aria-live="polite" aria-atomic="true"></div>
   `;
   const importBtn = root.querySelector('#importBtn');
   const fileInput = root.querySelector('#fileInput');
@@ -34,3 +35,50 @@ export function toast(msg, opts={}){
   setTimeout(()=>{ div.classList.add('hide'); div.style.opacity='0'; setTimeout(()=>div.remove(), 300); }, opts.ms||2500);
 }
 export const showError = (m)=> toast(m, { type: 'error', ms: 4000 });
+
+export function promptModal({ title='入力', label='名前', value='' }={}){
+  return new Promise((resolve)=>{
+    const root = document.getElementById('modal-root');
+    if (!root) return resolve(null);
+    const wrap = document.createElement('div');
+    wrap.className = 'modal-backdrop';
+    wrap.innerHTML = `
+      <div role="dialog" aria-modal="true" class="modal">
+        <header>${title}</header>
+        <div class="content">
+          <div class="field">
+            <label>${label}</label>
+            <input id="promptInput" type="text" value="${value}" />
+          </div>
+          <div id="promptError" class="meta" aria-live="polite"></div>
+        </div>
+        <footer>
+          <button class="btn" data-act="cancel">キャンセル</button>
+          <button class="btn primary" data-act="ok">OK</button>
+        </footer>
+      </div>
+    `;
+    root.appendChild(wrap);
+    const input = wrap.querySelector('#promptInput');
+    const err = wrap.querySelector('#promptError');
+    const close = (val)=>{ wrap.remove(); resolve(val); };
+    const validate = () => {
+      const v = String(input.value||'');
+      if (!v.trim()) { err.textContent = '名称を入力してください。'; return false; }
+      if (/[\\/:*?"<>|\u0000-\u001F]/.test(v)) { err.textContent = '使用できない文字が含まれています。'; return false; }
+      if (v.length > 128) { err.textContent = '名称が長すぎます（128文字以内）。'; return false; }
+      err.textContent = '';
+      return true;
+    };
+    wrap.addEventListener('click', (e)=>{
+      const actBtn = e.target.closest('button[data-act]');
+      if (!actBtn) return;
+      const act = actBtn.dataset.act;
+      if (act === 'cancel') close(null);
+      if (act === 'ok') { if (validate()) close(String(input.value||'').trim()); }
+    });
+    input.addEventListener('input', validate);
+    input.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') { e.preventDefault(); if (validate()) close(String(input.value||'').trim()); } });
+    setTimeout(()=> input.focus(), 0);
+  });
+}

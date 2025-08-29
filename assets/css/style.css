@@ -17,3 +17,13 @@ main{max-width:920px;margin:0 auto;padding:16px}
 .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:9999}
 .toast .msg{padding:10px 12px;border-radius:8px;background:#000d;color:#fff;backdrop-filter:saturate(1.2) blur(2px);box-shadow:0 4px 16px #0003}
 .toast .msg.error{background:#b0002033;border:1px solid #ff4d4f;color:#fff}
+
+/* Modal */
+.modal-backdrop{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;z-index:9998}
+.modal{min-width:300px;max-width:90vw;background:var(--bg);color:var(--fg);border:1px solid #0002;border-radius:10px;box-shadow:0 8px 24px #0004}
+.modal header{padding:12px 14px;border-bottom:1px solid #0002;font-weight:600}
+.modal .content{padding:14px}
+.modal footer{display:flex;gap:8px;justify-content:flex-end;padding:12px 14px;border-top:1px solid #0002}
+.field{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.field label{font-size:12px;color:var(--muted)}
+.field input{padding:8px 10px;border:1px solid var(--muted);border-radius:8px;background:transparent;color:var(--fg)}
