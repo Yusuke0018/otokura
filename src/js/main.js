@@ -149,7 +149,7 @@ async function boot() {
           <div class="menu" role="menu">
             <button class="menu-item" data-action="play">再生</button>
             <button class="menu-item" data-action="move">移動</button>
-            <button class="menu-item" data-action="rename">名称変更</button>
+            <button class="menu-item" data-action="rename">ファイル名変更</button>
             <button class="menu-item" data-action="info">情報</button>
             <button class="menu-item danger" data-action="delete">削除</button>
           </div>
@@ -288,7 +288,7 @@ async function boot() {
     if (actBtn && id){
       if (actBtn.dataset.act === 'rename'){
         const name = li.querySelector('.name')?.textContent || '';
-        const input = await promptModal({ title: 'フォルダ名称変更', label: '新しい名前', value: name });
+        const input = await promptModal({ title: 'フォルダ名の変更', label: '新しい名前', value: name });
         if (input == null) return;
         await db.updateFolder(id, { name: String(input).trim() });
         await renderFolders();
@@ -355,7 +355,7 @@ async function boot() {
     const t = tracks.find(x=>x.id===id);
     if (!t) return;
     const current = t.displayName || t.path || '';
-    const input = await promptModal({ title: '名称変更', label: '新しい名前（拡張子不要）', value: current });
+    const input = await promptModal({ title: 'ファイル名の変更', label: '新しいファイル名（拡張子不要）', value: current });
     if (input == null) return;
     const base = sanitizeTitle(input);
     if (!base) { showError('名称が無効です。'); return; }
@@ -370,7 +370,7 @@ async function boot() {
       // 再生中はそのまま、次回再生で新パスを使用
     }
     renderList(searchInput.value);
-    toast('名称を変更しました。');
+    toast('ファイル名を変更しました。');
   }
 
   async function handleDelete(id) {
