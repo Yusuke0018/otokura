@@ -135,7 +135,7 @@ async function boot() {
       const mb = bytes/1024/1024; return (mb>=1? mb.toFixed(1)+'MB' : (bytes/1024).toFixed(0)+'KB');
     };
     listEl.innerHTML = items.map(item => `
-      <li class="card" data-id="${item.id}">
+      <li class="card" data-id="${item.id}" draggable="true">
         <div class="card-body" data-action="play-quick">
           <div class="card-title">${item.name}</div>
           <div class="card-sub">
@@ -260,6 +260,43 @@ async function boot() {
     } else if (btn.dataset.action === 'delete') {
       handleDelete(id);
     }
+  });
+  // Drag & Drop: track -> folder
+  listEl.addEventListener('dragstart', (e)=>{
+    const li = e.target.closest('li.card[data-id]');
+    if (!li) return;
+    li.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', li.getAttribute('data-id'));
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  listEl.addEventListener('dragend', (e)=>{
+    const li = e.target.closest('li.card.dragging');
+    if (li) li.classList.remove('dragging');
+  });
+
+  folderListEl.addEventListener('dragover', (e)=>{
+    const li = e.target.closest('li.folder');
+    if (!li) return;
+    e.preventDefault();
+    li.classList.add('drop');
+    e.dataTransfer.dropEffect = 'move';
+  });
+  folderListEl.addEventListener('dragleave', (e)=>{
+    const li = e.target.closest('li.folder.drop');
+    if (li) li.classList.remove('drop');
+  });
+  folderListEl.addEventListener('drop', async (e)=>{
+    const li = e.target.closest('li.folder');
+    if (!li) return;
+    e.preventDefault();
+    const targetId = li.getAttribute('data-id') || null;
+    const trackId = e.dataTransfer.getData('text/plain');
+    if (!trackId) return;
+    await db.updateTrack(trackId, { folderId: targetId });
+    li.classList.remove('drop');
+    await renderList(searchInput.value);
+    if (currentFolderId !== targetId) { currentFolderId = targetId; await renderFolders(); }
+    toast(targetId ? 'フォルダへ移動しました。' : 'フォルダから外しました。');
   });
   document.addEventListener('click', (e)=>{
     for (const m of listEl.querySelectorAll('.menu.open')) m.classList.remove('open');
@@ -445,6 +482,7 @@ async function boot() {
         size: f.size,
         addedAt: Date.now(),
         updatedAt: Date.now(),
+        folderId: currentFolderId || null,
       };
       await db.addTrack(track);
       saved++;

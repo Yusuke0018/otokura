@@ -34,6 +34,8 @@ main{max-width:980px;margin:0 auto;padding:20px}
 /* Cards (track list) */
 .list.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
 .card{position:relative;display:flex;flex-direction:column;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 3px #0002;overflow:hidden}
+.card[draggable=true]{cursor:grab}
+.card.dragging{opacity:.6;filter:saturate(.9)}
 .card-body{padding:14px 14px 8px 14px;cursor:pointer}
 .card-body:hover{background:linear-gradient(180deg,#0b73f605,transparent)}
 .card-title{font-weight:600;letter-spacing:.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -54,7 +56,9 @@ main{max-width:980px;margin:0 auto;padding:20px}
 .sidebar .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .folders{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .folder{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:linear-gradient(180deg,#fff,#f6f7f9)}
+.folder{cursor:pointer}
 .folder .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .folder.active{outline:2px solid var(--accent);}
+.folder.drop{outline:2px dashed var(--accent); background:#0b73f610}
 .folder .actions{display:flex;gap:4px}
 .content{min-width:0}
