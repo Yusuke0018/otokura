@@ -1,0 +1,18 @@
+// UI: DOM構築（最小雛形）
+export function renderShell(root){
+  if(!root) return;
+  root.innerHTML = `
+    <h1>音蔵（おとくら）</h1>
+    <div class="toolbar" role="toolbar" aria-label="ライブラリ操作">
+      <input id="fileInput" class="sr-only" type="file" accept="audio/wav" multiple>
+      <button id="importBtn" class="btn primary">取り込み</button>
+      <input id="search" class="input" type="search" placeholder="検索">
+    </div>
+    <ul id="trackList" class="list" aria-label="トラック一覧"></ul>
+    <div id="player" class="player" aria-label="プレイヤー領域"></div>
+  `;
+  const importBtn = root.querySelector('#importBtn');
+  const fileInput = root.querySelector('#fileInput');
+  importBtn?.addEventListener('click', ()=> fileInput?.click());
+}
+
