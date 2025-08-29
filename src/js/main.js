@@ -171,8 +171,14 @@ async function boot() {
 
   fileInput.addEventListener('change', async () => {
     const files = Array.from(fileInput.files || []);
+    const MAX_BYTES = 200 * 1024 * 1024; // 200MB
+    let warned = false;
     for (const f of files) {
       if (!f || !/wav$/i.test(f.type) && !/\.wav$/i.test(f.name)) continue;
+      if (f.size > MAX_BYTES) {
+        if (!warned) { alert('200MBを超えるファイルは取り込み対象外です。'); warned = true; }
+        continue;
+      }
       const key = await storage.saveFile(f.name, f);
       const track = {
         id: (self.crypto?.randomUUID?.() || (`t_${Date.now()}_${Math.random().toString(36).slice(2)}`)),
