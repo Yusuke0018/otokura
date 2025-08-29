@@ -146,6 +146,7 @@ async function boot() {
         </div>
         <div class="card-actions">
           <button class="btn icon on-mobile" data-action="rename" aria-label="ファイル名変更">✎</button>
+          <button class="btn icon on-mobile" data-action="delete" aria-label="削除">🗑</button>
           <button class="btn icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
           <div class="menu" role="menu">
             <button class="menu-item" data-action="play">再生</button>
