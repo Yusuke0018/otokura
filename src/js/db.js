@@ -63,6 +63,9 @@ export const db = {
   async removeTrack(id){
     return withStore('tracks', 'readwrite', s => s.delete(id));
   },
+  async removePlayStats(trackId){
+    return withStore('playStats', 'readwrite', s => s.delete(trackId));
+  },
   async getSettings(){
     const def = { id: 'singleton', playbackRate: 1.0, sortKey: 'addedAt', sortDir: 'desc' };
     const val = await withStore('settings', 'readonly', s => new Promise((res, rej)=>{

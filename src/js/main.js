@@ -98,6 +98,7 @@ async function boot() {
         </div>
         <div>
           <button class="btn" data-action="play">再生</button>
+          <button class="btn" data-action="delete">削除</button>
         </div>
       </li>
     `).join('');
@@ -166,8 +167,31 @@ async function boot() {
     const id = li.getAttribute('data-id');
     if (btn.dataset.action === 'play') {
       playTrackById(id);
+    } else if (btn.dataset.action === 'delete') {
+      handleDelete(id);
     }
   });
+
+  async function handleDelete(id) {
+    const tracks = await db.listTracks();
+    const t = tracks.find(x => x.id === id);
+    if (!t) return;
+    const ok = confirm(`「${t.displayName||t.path}」を削除します。よろしいですか？`);
+    if (!ok) return;
+    try {
+      await storage.remove(t.path);
+    } catch {}
+    await db.removeTrack(id);
+    await db.removePlayStats(id);
+    if (currentId === id && audio) {
+      try { audio.pause(); } catch {}
+      if (currentUrl) { URL.revokeObjectURL(currentUrl); currentUrl = null; }
+      currentId = null;
+      playerEl.innerHTML = '';
+      audio = null;
+    }
+    renderList(searchInput.value);
+  }
 
   fileInput.addEventListener('change', async () => {
     const files = Array.from(fileInput.files || []);
