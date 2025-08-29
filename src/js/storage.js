@@ -17,6 +17,17 @@ async function opfsExists(dir, name){
   try { await dir.getFileHandle(name); return true; } catch { return false; }
 }
 
+async function idbHasFile(name){
+  const db = await openDB();
+  return await new Promise((res, rej)=>{
+    const tx = db.transaction('files', 'readonly');
+    const s = tx.objectStore('files');
+    const r = s.get(name);
+    r.onsuccess = () => res(!!r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+
 async function ensureUniqueName(name){
   const base = sanitize(name);
   if (supportsOPFS){
@@ -26,13 +37,9 @@ async function ensureUniqueName(name){
     while (await opfsExists(dir, `${base} (${i})`)) i++;
     return `${base} (${i})`;
   } else {
-    const db = await openDB();
-    const tx = db.transaction('files', 'readonly');
-    const s = tx.objectStore('files');
-    const has = (n)=> new Promise(res=>{ const r=s.getKey?n=>{ const g=s.get(n); g.onsuccess=()=>res(!!g.result); g.onerror=()=>res(false);} : null; if(r){r(n)} else { const g=s.get(n); g.onsuccess=()=>res(!!g.result); g.onerror=()=>res(false);} });
-    if (!(await has(base))) return base;
+    if (!(await idbHasFile(base))) return base;
     let i = 1;
-    while (await has(`${base} (${i})`)) i++;
+    while (await idbHasFile(`${base} (${i})`)) i++;
     return `${base} (${i})`;
   }
 }
