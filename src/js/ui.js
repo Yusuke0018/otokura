@@ -15,4 +15,3 @@ export function renderShell(root){
   const fileInput = root.querySelector('#fileInput');
   importBtn?.addEventListener('click', ()=> fileInput?.click());
 }
-
