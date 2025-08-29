@@ -2,7 +2,7 @@
 const v = new URL(import.meta.url).searchParams.get('v') || '0';
 
 async function boot() {
-  const [{ renderShell }, { storage }, { db }, metricsMod] = await Promise.all([
+  const [{ renderShell, toast, showError }, { storage }, { db }, metricsMod] = await Promise.all([
     import(`./ui.js?v=${v}`),
     import(`./storage.js?v=${v}`),
     import(`./db.js?v=${v}`),
@@ -126,7 +126,7 @@ async function boot() {
     const t = tracks.find(x => x.id === id);
     if (!t) return;
     const blob = await storage.getFile(t.path);
-    if (!blob) return;
+    if (!blob) { showError('ファイルを読み出せませんでした。'); return; }
 
     ensurePlayerUI();
     fired90 = false;
@@ -173,6 +173,9 @@ async function boot() {
       renderList(searchInput.value);
     };
 
+    audio.onerror = () => {
+      showError('再生に失敗しました。対応していない形式か破損の可能性があります。');
+    };
     await audio.play().catch(()=>{});
   }
 
@@ -224,7 +227,7 @@ async function boot() {
     if (!ok) return;
     try {
       await storage.remove(t.path);
-    } catch {}
+    } catch { showError('実体ファイルの削除に失敗しました。'); }
     await db.removeTrack(id);
     await db.removePlayStats(id);
     if (currentId === id && audio) {
@@ -235,6 +238,7 @@ async function boot() {
       audio = null;
     }
     renderList(searchInput.value);
+    toast('削除しました。');
   }
 
   fileInput.addEventListener('change', async () => {
@@ -253,16 +257,32 @@ async function boot() {
       } catch { return false; }
     };
 
+    let saved = 0;
     for (const f of files) {
       if (!f) continue;
       let ok = isWavType(f.type) || isWavName(f.name);
       if (!ok) ok = await sniffWav(f);
-      if (!ok) continue;
+      if (!ok) { toast(`${f.name} はWAVとして認識できませんでした。`); continue; }
       if (f.size > MAX_BYTES) {
         if (!warned) { alert('200MBを超えるファイルは取り込み対象外です。'); warned = true; }
         continue;
       }
-      const key = await storage.saveFile(f.name, f);
+      try {
+        if (navigator.storage?.estimate) {
+          const { quota=0, usage=0 } = await navigator.storage.estimate();
+          const remain = Math.max(0, quota - usage);
+          if (remain && remain < f.size * 1.05) {
+            toast('空き容量が不足している可能性があります。取り込みを試行します…');
+          }
+        }
+      } catch {}
+      let key;
+      try {
+        key = await storage.saveFile(f.name, f);
+      } catch (e) {
+        showError('取り込みに失敗しました（容量不足またはブラウザ制限）。');
+        continue;
+      }
       const track = {
         id: (self.crypto?.randomUUID?.() || (`t_${Date.now()}_${Math.random().toString(36).slice(2)}`)),
         path: key,
@@ -273,9 +293,11 @@ async function boot() {
         updatedAt: Date.now(),
       };
       await db.addTrack(track);
+      saved++;
     }
     fileInput.value = '';
     renderList(searchInput.value);
+    if (saved>0) toast(`${saved} 件を取り込みました。`);
   });
 
   searchInput.addEventListener('input', () => renderList(searchInput.value));

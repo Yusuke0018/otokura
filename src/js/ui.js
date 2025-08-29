@@ -17,8 +17,20 @@ export function renderShell(root){
     </div>
     <ul id="trackList" class="list" aria-label="トラック一覧"></ul>
     <div id="player" class="player" aria-label="プレイヤー領域"></div>
+    <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
   `;
   const importBtn = root.querySelector('#importBtn');
   const fileInput = root.querySelector('#fileInput');
   importBtn?.addEventListener('click', ()=> fileInput?.click());
 }
+
+export function toast(msg, opts={}){
+  const box = document.getElementById('toast');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = `msg${opts.type?` ${opts.type}`:''}`;
+  div.textContent = String(msg||'');
+  box.appendChild(div);
+  setTimeout(()=>{ div.classList.add('hide'); div.style.opacity='0'; setTimeout(()=>div.remove(), 300); }, opts.ms||2500);
+}
+export const showError = (m)=> toast(m, { type: 'error', ms: 4000 });
