@@ -1,7 +1,7 @@
 // db: メタデータ層（IndexedDB 実装）
 
 const DB_NAME = 'otokura';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -22,6 +22,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('fileChunks')) {
         db.createObjectStore('fileChunks', { keyPath: ['name', 'idx'] });
+      }
+      if (!db.objectStoreNames.contains('folders')) {
+        db.createObjectStore('folders', { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -87,6 +90,44 @@ export const db = {
   async setPlayStats(trackId, stats){
     const val = { trackId, ...stats };
     return withStore('playStats', 'readwrite', s => s.put(val));
+  },
+  // Folders
+  async listFolders(){
+    return withStore('folders', 'readonly', s => new Promise((res, rej)=>{
+      const r = s.getAll ? s.getAll() : s.openCursor();
+      if (r && 'onsuccess' in r && s.getAll){ r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); }
+      else { const items=[]; r.onsuccess=()=>{ const c=r.result; if(c){ items.push(c.value); c.continue(); } else res(items);}; r.onerror=()=>rej(r.error); }
+    }));
+  },
+  async addFolder(folder){
+    // folder: { id, name, createdAt, updatedAt }
+    return withStore('folders', 'readwrite', s => s.put(folder));
+  },
+  async updateFolder(id, patch){
+    const cur = await withStore('folders', 'readonly', s => new Promise((res, rej)=>{ const r=s.get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}));
+    if (!cur) return;
+    const next = { ...cur, ...patch, updatedAt: Date.now() };
+    return withStore('folders', 'readwrite', s => s.put(next));
+  },
+  async removeFolder(id){
+    // Remove folder and clear folderId from tracks
+    const db = await openDB();
+    await new Promise((res, rej)=>{
+      const tx = db.transaction(['folders','tracks'], 'readwrite');
+      const f = tx.objectStore('folders');
+      const t = tx.objectStore('tracks');
+      f.delete(id);
+      const cursor = t.openCursor();
+      cursor.onsuccess = () => {
+        const c = cursor.result; if (c){
+          const v = c.value; if (v.folderId === id){ c.update({ ...v, folderId: null, updatedAt: Date.now() }); }
+          c.continue();
+        }
+      };
+      tx.oncomplete=()=>res(true);
+      tx.onerror=()=>rej(tx.error);
+      tx.onabort=()=>rej(tx.error);
+    });
   },
 };
 

@@ -2,7 +2,7 @@
 const v = new URL(import.meta.url).searchParams.get('v') || '0';
 
 async function boot() {
-  const [{ renderShell, toast, showError, promptModal }, { storage }, { db }, metricsMod] = await Promise.all([
+  const [{ renderShell, toast, showError, promptModal, folderPickerModal }, { storage }, { db }, metricsMod] = await Promise.all([
     import(`./ui.js?v=${v}`),
     import(`./storage.js?v=${v}`),
     import(`./db.js?v=${v}`),
@@ -20,6 +20,8 @@ async function boot() {
   const searchInput = root.querySelector('#search');
   const listEl = root.querySelector('#trackList');
   const playerEl = root.querySelector('#player');
+  const folderListEl = root.querySelector('#folderList');
+  const newFolderBtn = root.querySelector('#newFolder');
   const sortKeySel = root.querySelector('#sortKey');
   const sortDirBtn = root.querySelector('#sortDir');
 
@@ -31,6 +33,7 @@ async function boot() {
   let playbackRate = Number(settings.playbackRate || 1.0) || 1.0;
   let sortKey = settings.sortKey || 'addedAt';
   let sortDir = settings.sortDir || 'desc';
+  let currentFolderId = null;
   if (sortKeySel) sortKeySel.value = sortKey;
   if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
 
@@ -88,7 +91,11 @@ async function boot() {
   async function renderList(filter = '') {
     const tracks = await db.listTracks();
     const q = filter.trim().toLowerCase();
-    const filtered = tracks.filter(t => !q || (t.displayName || '').toLowerCase().includes(q));
+    const filtered = tracks.filter(t => {
+      const inFolder = currentFolderId ? (t.folderId === currentFolderId) : true;
+      const match = !q || (t.displayName || '').toLowerCase().includes(q);
+      return inFolder && match;
+    });
     const statsArr = await Promise.all(filtered.map(t => db.getPlayStats(t.id)));
     const items = filtered.map((t, i) => ({
       id: t.id,
@@ -100,15 +107,23 @@ async function boot() {
       lastPlayedAt: statsArr[i]?.lastPlayedAt || 0,
     }));
     const dirMul = (sortDir==='desc') ? -1 : 1;
-    items.sort((a,b)=>{
-      const k = sortKey;
-      let va = a[k] ?? '';
-      let vb = b[k] ?? '';
-      if (k === 'displayName' || k === 'name') { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
-      if (va < vb) return -1 * dirMul;
-      if (va > vb) return 1 * dirMul;
-      return 0;
-    });
+    if (sortKey === 'popular') {
+      items.sort((a,b)=>{
+        if ((b.playCount|0) !== (a.playCount|0)) return (b.playCount|0) - (a.playCount|0);
+        return (b.lastPlayedAt|0) - (a.lastPlayedAt|0);
+      });
+      if (sortDir === 'asc') items.reverse();
+    } else {
+      items.sort((a,b)=>{
+        const k = sortKey;
+        let va = a[k] ?? '';
+        let vb = b[k] ?? '';
+        if (k === 'displayName' || k === 'name') { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
+        if (va < vb) return -1 * dirMul;
+        if (va > vb) return 1 * dirMul;
+        return 0;
+      });
+    }
     listEl.innerHTML = items.map(item => `
       <li class="item" data-id="${item.id}">
         <div>
@@ -117,6 +132,7 @@ async function boot() {
         </div>
         <div>
           <button class="btn" data-action="play">再生</button>
+          <button class="btn" data-action="move">移動</button>
           <button class="btn" data-action="info">情報</button>
           <button class="btn" data-action="rename">名称変更</button>
           <button class="btn" data-action="delete">削除</button>
@@ -206,12 +222,75 @@ async function boot() {
       playTrackById(id);
     } else if (btn.dataset.action === 'info') {
       handleInfo(id);
+    } else if (btn.dataset.action === 'move') {
+      handleMove(id);
     } else if (btn.dataset.action === 'rename') {
       handleRename(id);
     } else if (btn.dataset.action === 'delete') {
       handleDelete(id);
     }
   });
+
+  async function renderFolders(){
+    const folders = await db.listFolders();
+    const items = [{ id: null, name: 'すべて' }, ...folders];
+    folderListEl.innerHTML = items.map(f => `
+      <li class="folder${(f.id===currentFolderId)?' active':''}" data-id="${f.id||''}">
+        <span class="name">${f.name}</span>
+        ${f.id ? `<span class="actions">
+          <button class="btn" data-act="rename" title="名称変更">✎</button>
+          <button class="btn" data-act="delete" title="削除">🗑</button>
+        </span>` : ''}
+      </li>
+    `).join('');
+  }
+
+  folderListEl.addEventListener('click', async (e)=>{
+    const li = e.target.closest('li.folder');
+    if (!li) return;
+    const id = li.getAttribute('data-id') || null;
+    const actBtn = e.target.closest('button[data-act]');
+    if (actBtn && id){
+      if (actBtn.dataset.act === 'rename'){
+        const name = li.querySelector('.name')?.textContent || '';
+        const input = await promptModal({ title: 'フォルダ名称変更', label: '新しい名前', value: name });
+        if (input == null) return;
+        await db.updateFolder(id, { name: String(input).trim() });
+        await renderFolders();
+        return;
+      } else if (actBtn.dataset.act === 'delete'){
+        if (!confirm('フォルダを削除します。フォルダ内のトラックは「すべて」に残ります。')) return;
+        await db.removeFolder(id);
+        if (currentFolderId === id) currentFolderId = null;
+        await renderFolders();
+        await renderList(searchInput.value);
+        return;
+      }
+    }
+    // select folder
+    currentFolderId = id || null;
+    await renderFolders();
+    await renderList(searchInput.value);
+  });
+
+  newFolderBtn.addEventListener('click', async ()=>{
+    const input = await promptModal({ title: '新規フォルダ', label: 'フォルダ名', value: '' });
+    if (input == null) return;
+    const folder = { id: (self.crypto?.randomUUID?.() || (`f_${Date.now()}_${Math.random().toString(36).slice(2)}`)), name: String(input).trim(), createdAt: Date.now(), updatedAt: Date.now() };
+    await db.addFolder(folder);
+    await renderFolders();
+  });
+
+  async function handleMove(id){
+    const folders = await db.listFolders();
+    const chosen = await folderPickerModal(folders);
+    if (chosen === undefined) return;
+    const tracks = await db.listTracks();
+    const t = tracks.find(x=>x.id===id);
+    if (!t) return;
+    await db.updateTrack(id, { folderId: chosen || null });
+    await renderList(searchInput.value);
+  }
 
   async function handleInfo(id){
     const tracks = await db.listTracks();
@@ -354,6 +433,7 @@ async function boot() {
     renderList(searchInput.value);
   });
 
+  await renderFolders();
   await renderList();
 }
 
