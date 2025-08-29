@@ -17,6 +17,8 @@ async function boot() {
   const searchInput = root.querySelector('#search');
   const listEl = root.querySelector('#trackList');
   const playerEl = root.querySelector('#player');
+  const sortKeySel = root.querySelector('#sortKey');
+  const sortDirBtn = root.querySelector('#sortDir');
 
   let audio = null;
   let currentId = null;
@@ -24,6 +26,10 @@ async function boot() {
   let currentUrl = null;
   const settings = await db.getSettings();
   let playbackRate = Number(settings.playbackRate || 1.0) || 1.0;
+  let sortKey = settings.sortKey || 'addedAt';
+  let sortDir = settings.sortDir || 'desc';
+  if (sortKeySel) sortKeySel.value = sortKey;
+  if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
 
   function ensurePlayerUI() {
     if (!audio) {
@@ -90,6 +96,16 @@ async function boot() {
       playCount: statsArr[i]?.playCount || 0,
       lastPlayedAt: statsArr[i]?.lastPlayedAt || 0,
     }));
+    const dirMul = (sortDir==='desc') ? -1 : 1;
+    items.sort((a,b)=>{
+      const k = sortKey;
+      let va = a[k] ?? '';
+      let vb = b[k] ?? '';
+      if (k === 'displayName' || k === 'name') { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
+      if (va < vb) return -1 * dirMul;
+      if (va > vb) return 1 * dirMul;
+      return 0;
+    });
     listEl.innerHTML = items.map(item => `
       <li class="item" data-id="${item.id}">
         <div>
@@ -98,6 +114,7 @@ async function boot() {
         </div>
         <div>
           <button class="btn" data-action="play">再生</button>
+          <button class="btn" data-action="rename">名称変更</button>
           <button class="btn" data-action="delete">削除</button>
         </div>
       </li>
@@ -167,10 +184,37 @@ async function boot() {
     const id = li.getAttribute('data-id');
     if (btn.dataset.action === 'play') {
       playTrackById(id);
+    } else if (btn.dataset.action === 'rename') {
+      handleRename(id);
     } else if (btn.dataset.action === 'delete') {
       handleDelete(id);
     }
   });
+
+  function sanitizeTitle(name){
+    return String(name||'').replace(/[\\/:*?"<>|\u0000-\u001F]/g,'_').trim().slice(0,128);
+  }
+
+  async function handleRename(id){
+    const tracks = await db.listTracks();
+    const t = tracks.find(x=>x.id===id);
+    if (!t) return;
+    const current = t.displayName || t.path || '';
+    const input = prompt('新しい名前を入力してください（拡張子不要）', current);
+    if (input == null) return;
+    const base = sanitizeTitle(input);
+    if (!base) { alert('名称が無効です。'); return; }
+    const newFileName = `${base}.wav`;
+    let newPath = t.path;
+    try {
+      newPath = await storage.rename(t.path, newFileName) || t.path;
+    } catch {}
+    await db.updateTrack(t.id, { displayName: base, path: newPath });
+    if (currentId === id && audio) {
+      // 再生中はそのまま、次回再生で新パスを使用
+    }
+    renderList(searchInput.value);
+  }
 
   async function handleDelete(id) {
     const tracks = await db.listTracks();
@@ -235,6 +279,18 @@ async function boot() {
   });
 
   searchInput.addEventListener('input', () => renderList(searchInput.value));
+
+  if (sortKeySel) sortKeySel.addEventListener('change', async ()=>{
+    sortKey = sortKeySel.value;
+    await db.setSettings({ sortKey });
+    renderList(searchInput.value);
+  });
+  if (sortDirBtn) sortDirBtn.addEventListener('click', async ()=>{
+    sortDir = (sortDir==='desc') ? 'asc' : 'desc';
+    sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
+    await db.setSettings({ sortDir });
+    renderList(searchInput.value);
+  });
 
   await renderList();
 }

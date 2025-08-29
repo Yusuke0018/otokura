@@ -6,6 +6,13 @@ export function renderShell(root){
     <div class="toolbar" role="toolbar" aria-label="ライブラリ操作">
       <input id="fileInput" class="sr-only" type="file" accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave" multiple>
       <button id="importBtn" class="btn primary">取り込み</button>
+      <label class="sr-only" for="sortKey">並び替え</label>
+      <select id="sortKey" class="input">
+        <option value="addedAt">追加日時</option>
+        <option value="displayName">名前</option>
+        <option value="playCount">再生回数</option>
+      </select>
+      <button id="sortDir" class="btn" aria-pressed="false" title="昇順/降順">降順</button>
       <input id="search" class="input" type="search" placeholder="検索">
     </div>
     <ul id="trackList" class="list" aria-label="トラック一覧"></ul>
