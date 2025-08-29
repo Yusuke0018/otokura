@@ -2,7 +2,7 @@
 export function renderShell(root){
   if(!root) return;
   root.innerHTML = `
-    <h1>音蔵（おとくら）</h1>
+    <h1 class="title">音蔵（おとくら）</h1>
     <div class="toolbar" role="toolbar" aria-label="ライブラリ操作">
       <input id="fileInput" class="sr-only" type="file" accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave" multiple>
       <button id="importBtn" class="btn primary">取り込み</button>

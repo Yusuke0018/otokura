@@ -8,7 +8,17 @@ VERSION="$(date +%Y%m%d%H%M%S)"
 
 # Update cache-busting query param in index.html
 if [ -f index.html ]; then
-  perl -0777 -i -pe "s/(style\.css\?v=)([0-9A-Za-z_-]*)/\${1}$VERSION/g; s/(main\.js\?v=)([0-9A-Za-z_-]*)/\${1}$VERSION/g" index.html
+  perl -0777 -i -pe "
+    s/(style\.css\?v=)([0-9A-Za-z_-]*)/\${1}$VERSION/g;
+    s/(main\.js\?v=)([0-9A-Za-z_-]*)/\${1}$VERSION/g;
+    s/(manifest\.webmanifest\?v=)([0-9A-Za-z_-]*)/\${1}$VERSION/g;
+    s/(icon\-192\.png\?v=)([0-9A-Za-z_-]*)/\${1}$VERSION/g;
+  " index.html
+fi
+
+# Bump SW version for cache bust
+if [ -f sw.js ]; then
+  perl -0777 -i -pe "s/(const VERSION = ')\d+('\;)/\${1}$VERSION\${2}/g" sw.js
 fi
 
 # Ensure branch
@@ -24,4 +34,3 @@ git commit -m "chore(bootstrap): 音蔵 初期雛形 + 強制キャッシュバ�
 git push -u origin "$BRANCH"
 
 echo "Pushed with cache-busted assets: v=$VERSION"
-

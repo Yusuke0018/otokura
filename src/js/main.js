@@ -12,6 +12,9 @@ async function boot() {
   await db.init();
   const root = document.getElementById('app');
   renderShell(root);
+  if ('serviceWorker' in navigator) {
+    try { await navigator.serviceWorker.register(`./sw.js?v=${v}`); } catch {}
+  }
 
   const fileInput = root.querySelector('#fileInput');
   const searchInput = root.querySelector('#search');
