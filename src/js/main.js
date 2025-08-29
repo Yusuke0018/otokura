@@ -145,6 +145,7 @@ async function boot() {
           </div>
         </div>
         <div class="card-actions">
+          <button class="btn icon on-mobile" data-action="rename" aria-label="ファイル名変更">✎</button>
           <button class="btn icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
           <div class="menu" role="menu">
             <button class="menu-item" data-action="play">再生</button>
@@ -265,6 +266,20 @@ async function boot() {
       handleDelete(id);
     }
   });
+  // Long-press on card body to rename (mobile-friendly)
+  let lpTimer = null;
+  listEl.addEventListener('pointerdown', (e) => {
+    const body = e.target.closest('.card-body');
+    if (!body || !listEl.contains(body)) return;
+    const li = body.closest('li[data-id]');
+    if (!li) return;
+    const id = li.getAttribute('data-id');
+    lpTimer = setTimeout(() => { handleRename(id); }, 650);
+  });
+  const clearLP = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+  listEl.addEventListener('pointerup', clearLP);
+  listEl.addEventListener('pointercancel', clearLP);
+  listEl.addEventListener('pointerleave', clearLP);
   // Drag & Drop: track -> folder
   listEl.addEventListener('dragstart', (e)=>{
     const li = e.target.closest('li.card[data-id]');

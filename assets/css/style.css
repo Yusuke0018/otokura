@@ -50,6 +50,11 @@ main{max-width:980px;margin:0 auto;padding:20px}
 .menu .menu-item{display:block;width:100%;text-align:left;background:transparent;border:0;padding:10px 12px;color:var(--fg);cursor:pointer}
 .menu .menu-item:hover{background:#0b73f60e}
 .menu .menu-item.danger{color:#d92d20}
+.on-mobile{display:none}
+@media (max-width: 640px){
+  .on-mobile{display:inline-flex}
+  .kebab{display:none}
+}
 .layout{display:grid;grid-template-columns:240px 1fr;gap:16px}
 @media (max-width: 860px){.layout{grid-template-columns:1fr}}
 .sidebar{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 2px #0001; padding:12px}
