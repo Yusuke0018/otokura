@@ -1,4 +1,10 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 音蔵（おとくら）
+
+ブラウザ内で完結するWAVプレイヤー（ローカル保存・倍速・レジューム・再生回数）。
+
+- 公開: GitHub Pages（`main`ブランチ直下）
+- PWA: ホーム画面に追加対応、オフライン動作（シェル）
+- TODO一覧: `docs/TODO.md`
 
 ## Getting Started
 
