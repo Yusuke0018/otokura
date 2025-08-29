@@ -105,6 +105,7 @@ async function boot() {
       addedAt: t.addedAt,
       playCount: statsArr[i]?.playCount || 0,
       lastPlayedAt: statsArr[i]?.lastPlayedAt || 0,
+      durationMs: t.durationMs || 0,
     }));
     const dirMul = (sortDir==='desc') ? -1 : 1;
     if (sortKey === 'popular') {
@@ -124,18 +125,34 @@ async function boot() {
         return 0;
       });
     }
+    const fmtTime = (ms)=>{
+      const s = Math.max(0, Math.round(ms/1000));
+      const m = Math.floor(s/60), ss = String(s%60).padStart(2,'0');
+      return m+':'+ss;
+    };
+    const fmtSize = (bytes)=>{
+      if (!bytes && bytes!==0) return '';
+      const mb = bytes/1024/1024; return (mb>=1? mb.toFixed(1)+'MB' : (bytes/1024).toFixed(0)+'KB');
+    };
     listEl.innerHTML = items.map(item => `
-      <li class="item" data-id="${item.id}">
-        <div>
-          <div>${item.name}</div>
-          <div class="meta">${(item.size||0)} bytes • 追加:${new Date(item.addedAt||Date.now()).toLocaleString()} • 再生:${item.playCount}${item.lastPlayedAt?` • 最終:${new Date(item.lastPlayedAt).toLocaleString()}`:''}</div>
+      <li class="card" data-id="${item.id}">
+        <div class="card-body" data-action="play-quick">
+          <div class="card-title">${item.name}</div>
+          <div class="card-sub">
+            ${item.durationMs?`<span class="chip">${fmtTime(item.durationMs)}</span>`:''}
+            ${item.size?`<span class="chip">${fmtSize(item.size)}</span>`:''}
+            <span class="chip">再生 ${item.playCount||0}</span>
+          </div>
         </div>
-        <div>
-          <button class="btn" data-action="play">再生</button>
-          <button class="btn" data-action="move">移動</button>
-          <button class="btn" data-action="info">情報</button>
-          <button class="btn" data-action="rename">名称変更</button>
-          <button class="btn" data-action="delete">削除</button>
+        <div class="card-actions">
+          <button class="btn icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
+          <div class="menu" role="menu">
+            <button class="menu-item" data-action="play">再生</button>
+            <button class="menu-item" data-action="move">移動</button>
+            <button class="menu-item" data-action="rename">名称変更</button>
+            <button class="menu-item" data-action="info">情報</button>
+            <button class="menu-item danger" data-action="delete">削除</button>
+          </div>
         </div>
       </li>
     `).join('');
@@ -213,6 +230,20 @@ async function boot() {
   }
 
   listEl.addEventListener('click', (e) => {
+    const body = e.target.closest('.card-body');
+    if (body && listEl.contains(body)){
+      const li = body.closest('li[data-id]');
+      if (li) { const id = li.getAttribute('data-id'); playTrackById(id); return; }
+    }
+    const kebab = e.target.closest('[data-menu="toggle"]');
+    if (kebab){
+      const actions = kebab.parentElement;
+      const menu = actions.querySelector('.menu');
+      const open = menu.classList.toggle('open');
+      kebab.setAttribute('aria-expanded', open? 'true':'false');
+      e.stopPropagation();
+      return;
+    }
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
     const li = btn.closest('li[data-id]');
@@ -229,6 +260,10 @@ async function boot() {
     } else if (btn.dataset.action === 'delete') {
       handleDelete(id);
     }
+  });
+  document.addEventListener('click', (e)=>{
+    for (const m of listEl.querySelectorAll('.menu.open')) m.classList.remove('open');
+    for (const k of listEl.querySelectorAll('[data-menu="toggle"][aria-expanded="true"]')) k.setAttribute('aria-expanded','false');
   });
 
   async function renderFolders(){

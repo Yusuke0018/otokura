@@ -25,7 +25,7 @@ export function renderShell(root){
           <button id="sortDir" class="btn" aria-pressed="false" title="昇順/降順">降順</button>
           <input id="search" class="input" type="search" placeholder="検索">
         </div>
-        <ul id="trackList" class="list" aria-label="トラック一覧"></ul>
+        <ul id="trackList" class="list cards" aria-label="トラック一覧"></ul>
         <div id="player" class="player" aria-label="プレイヤー領域"></div>
       </section>
     </div>
