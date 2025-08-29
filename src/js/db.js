@@ -1,7 +1,7 @@
 // db: メタデータ層（IndexedDB 実装）
 
 const DB_NAME = 'otokura';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -19,6 +19,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('files')) {
         db.createObjectStore('files', { keyPath: 'name' });
+      }
+      if (!db.objectStoreNames.contains('fileChunks')) {
+        db.createObjectStore('fileChunks', { keyPath: ['name', 'idx'] });
       }
     };
     req.onsuccess = () => resolve(req.result);

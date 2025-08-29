@@ -2,6 +2,8 @@
 import { openDB } from './db.js';
 
 const supportsOPFS = !!(navigator.storage && navigator.storage.getDirectory);
+const CHUNK_SIZE = 8 * 1024 * 1024; // 8MiB
+const CHUNK_THRESHOLD = 32 * 1024 * 1024; // 32MiB 以上は分割保存（IndexedDB）
 
 function sanitize(name){
   return String(name || 'unnamed').replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_').slice(0, 255);
@@ -51,19 +53,47 @@ export const storage = {
       const dir = await getDir();
       const handle = await dir.getFileHandle(unique, { create: true });
       const ws = await handle.createWritable();
-      await ws.write(blob);
-      await ws.close();
+      if (blob && blob.stream && ws && ws.write) {
+        // Chrome系: ストリーミングで大容量でも安定
+        await blob.stream().pipeTo(ws);
+      } else {
+        // 後方互換
+        await ws.write(blob);
+        await ws.close();
+      }
       return unique;
     } else {
       const db = await openDB();
-      return await new Promise((resolve, reject)=>{
-        const tx = db.transaction('files', 'readwrite');
-        const s = tx.objectStore('files');
-        s.put({ name: unique, blob, size: blob.size, type: blob.type, addedAt: Date.now() });
-        tx.oncomplete=()=>resolve(unique);
-        tx.onerror=()=>reject(tx.error);
-        tx.onabort=()=>reject(tx.error);
-      });
+      if (blob.size >= CHUNK_THRESHOLD) {
+        // 分割保存（大容量対応）
+        const total = blob.size;
+        const chunks = Math.ceil(total / CHUNK_SIZE);
+        return await new Promise((resolve, reject)=>{
+          const tx = db.transaction(['files','fileChunks'], 'readwrite');
+          const meta = tx.objectStore('files');
+          const chunkStore = tx.objectStore('fileChunks');
+          for (let i=0; i<chunks; i++){
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, total);
+            const part = blob.slice(start, end);
+            chunkStore.put({ name: unique, idx: i, blob: part });
+          }
+          meta.put({ name: unique, size: blob.size, type: blob.type, addedAt: Date.now(), chunked: true, chunkSize: CHUNK_SIZE, chunks });
+          tx.oncomplete=()=>resolve(unique);
+          tx.onerror=()=>reject(tx.error);
+          tx.onabort=()=>reject(tx.error);
+        });
+      } else {
+        // そのまま保存
+        return await new Promise((resolve, reject)=>{
+          const tx = db.transaction('files', 'readwrite');
+          const s = tx.objectStore('files');
+          s.put({ name: unique, blob, size: blob.size, type: blob.type, addedAt: Date.now(), chunked: false });
+          tx.oncomplete=()=>resolve(unique);
+          tx.onerror=()=>reject(tx.error);
+          tx.onabort=()=>reject(tx.error);
+        });
+      }
     }
   },
   async listFiles(){
@@ -96,12 +126,28 @@ export const storage = {
       return await h.getFile();
     } else {
       const db = await openDB();
-      return await new Promise((res, rej)=>{
+      const meta = await new Promise((res, rej)=>{
         const tx = db.transaction('files', 'readonly');
         const s = tx.objectStore('files');
         const r = s.get(name);
-        r.onsuccess=()=>res(r.result?.blob||null);
+        r.onsuccess=()=>res(r.result||null);
         r.onerror=()=>rej(r.error);
+      });
+      if (!meta) return null;
+      if (!meta.chunked) return meta.blob || null;
+      // 分割再構成
+      return await new Promise((res, rej)=>{
+        const tx = db.transaction('fileChunks', 'readonly');
+        const s = tx.objectStore('fileChunks');
+        const range = IDBKeyRange.bound([name, 0], [name, meta.chunks]);
+        const parts = [];
+        const req = s.openCursor(range);
+        req.onsuccess = () => {
+          const cur = req.result;
+          if (cur){ parts.push(cur.value.blob); cur.continue(); }
+          else res(new Blob(parts, { type: meta.type }));
+        };
+        req.onerror = () => rej(req.error);
       });
     }
   },
@@ -120,13 +166,27 @@ export const storage = {
     } else {
       const db = await openDB();
       return await new Promise((res, rej)=>{
-        const tx = db.transaction('files', 'readwrite');
-        const s = tx.objectStore('files');
-        const g = s.get(oldName);
+        const tx = db.transaction(['files','fileChunks'], 'readwrite');
+        const files = tx.objectStore('files');
+        const chunks = tx.objectStore('fileChunks');
+        const g = files.get(oldName);
         g.onsuccess = () => {
           const v = g.result; if(!v){ res(null); return; }
-          s.put({ ...v, name: unique });
-          s.delete(oldName);
+          if (v.chunked){
+            const range = IDBKeyRange.bound([oldName, 0], [oldName, v.chunks]);
+            const curReq = chunks.openCursor(range);
+            curReq.onsuccess = () => {
+              const c = curReq.result;
+              if (c){
+                const { idx, blob } = c.value;
+                chunks.put({ name: unique, idx, blob });
+                chunks.delete([oldName, idx]);
+                c.continue();
+              }
+            };
+          }
+          files.put({ ...v, name: unique });
+          files.delete(oldName);
         };
         tx.oncomplete=()=>res(unique);
         tx.onerror=()=>rej(tx.error);
@@ -141,9 +201,24 @@ export const storage = {
       return true;
     } else {
       const db = await openDB();
+      const meta = await new Promise((res, rej)=>{
+        const tx = db.transaction('files', 'readonly');
+        const s = tx.objectStore('files');
+        const r = s.get(name);
+        r.onsuccess=()=>res(r.result||null);
+        r.onerror=()=>rej(r.error);
+      });
       return await new Promise((res, rej)=>{
-        const tx = db.transaction('files', 'readwrite');
+        const tx = db.transaction(['files','fileChunks'], 'readwrite');
         tx.objectStore('files').delete(name);
+        if (meta?.chunked){
+          const s = tx.objectStore('fileChunks');
+          const range = IDBKeyRange.bound([name, 0], [name, meta.chunks]);
+          const cursor = s.openCursor(range);
+          cursor.onsuccess = () => {
+            const c = cursor.result; if (c){ s.delete(c.primaryKey); c.continue(); }
+          };
+        }
         tx.oncomplete=()=>res(true);
         tx.onerror=()=>rej(tx.error);
         tx.onabort=()=>rej(tx.error);
