@@ -435,11 +435,6 @@ async function boot() {
     if (!t) return;
     const ok = confirm(`「${t.displayName||t.path}」を削除します。よろしいですか？`);
     if (!ok) return;
-    try {
-      await storage.remove(t.path);
-    } catch { showError('実体ファイルの削除に失敗しました。'); }
-    await db.removeTrack(id);
-    await db.removePlayStats(id);
     if (currentId === id && audio) {
       try { audio.pause(); } catch {}
       if (currentUrl) { URL.revokeObjectURL(currentUrl); currentUrl = null; }
@@ -447,6 +442,11 @@ async function boot() {
       playerEl.innerHTML = '';
       audio = null;
     }
+    try {
+      await storage.remove(t.path);
+    } catch { showError('実体ファイルの削除に失敗しました。'); }
+    await db.removeTrack(id);
+    await db.removePlayStats(id);
     renderList(searchInput.value);
     toast('削除しました。');
   }
