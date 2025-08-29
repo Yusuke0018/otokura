@@ -173,8 +173,23 @@ async function boot() {
     const files = Array.from(fileInput.files || []);
     const MAX_BYTES = 200 * 1024 * 1024; // 200MB
     let warned = false;
+
+    const isWavType = (t) => /^audio\/(wav|x-wav|wave|vnd\.wave)$/i.test(String(t||''));
+    const isWavName = (n) => /\.wav$/i.test(String(n||''));
+    const sniffWav = async (file) => {
+      try {
+        const buf = await file.slice(0, 12).arrayBuffer();
+        const b = new Uint8Array(buf);
+        const ascii = (i,len)=>String.fromCharCode(...b.slice(i,i+len));
+        return ascii(0,4)==='RIFF' && ascii(8,4)==='WAVE';
+      } catch { return false; }
+    };
+
     for (const f of files) {
-      if (!f || !/wav$/i.test(f.type) && !/\.wav$/i.test(f.name)) continue;
+      if (!f) continue;
+      let ok = isWavType(f.type) || isWavName(f.name);
+      if (!ok) ok = await sniffWav(f);
+      if (!ok) continue;
       if (f.size > MAX_BYTES) {
         if (!warned) { alert('200MBを超えるファイルは取り込み対象外です。'); warned = true; }
         continue;
