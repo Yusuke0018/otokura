@@ -327,20 +327,75 @@ async function boot() {
       handleDelete(id);
     }
   });
-  // Long-press on card body to rename (mobile-friendly)
+  // Long-press (mobile): manual reorder in "手動" mode; otherwise rename
   let lpTimer = null;
+  let touchDrag = { active: false, id: null, targetLi: null, before: true };
+  function allowManualReorder(){ return (sortKey === 'manual') && !String(searchInput.value||'').trim(); }
+  function clearDropMarkers(){ for (const el of listEl.querySelectorAll('.drop-before,.drop-after')) el.classList.remove('drop-before','drop-after'); }
+  function cleanupTouchDrag(){
+    touchDrag = { active: false, id: null, targetLi: null, before: true };
+    clearDropMarkers();
+  }
   listEl.addEventListener('pointerdown', (e) => {
-    const body = e.target.closest('.card-body');
+    const body = e.target.closest('.card-body, li.card');
     if (!body || !listEl.contains(body)) return;
     const li = body.closest('li[data-id]');
     if (!li) return;
     const id = li.getAttribute('data-id');
-    lpTimer = setTimeout(() => { handleRename(id); }, 650);
+    // Start long-press timer (mobile friendly)
+    lpTimer = setTimeout(() => {
+      if (e.pointerType === 'touch' && allowManualReorder()) {
+        // enter touch-drag reorder mode
+        touchDrag = { active: true, id, targetLi: null, before: true };
+        li.classList.add('dragging');
+      } else {
+        handleRename(id);
+      }
+    }, 650);
   });
-  const clearLP = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
-  listEl.addEventListener('pointerup', clearLP);
-  listEl.addEventListener('pointercancel', clearLP);
-  listEl.addEventListener('pointerleave', clearLP);
+  function cancelLongPress(){ if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }
+  listEl.addEventListener('pointermove', (e)=>{
+    if (!touchDrag.active) return;
+    e.preventDefault();
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const target = el && el.closest ? el.closest('li.card[data-id]') : null;
+    clearDropMarkers();
+    if (!target) { touchDrag.targetLi = null; return; }
+    const rect = target.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height/2;
+    target.classList.toggle('drop-before', before);
+    target.classList.toggle('drop-after', !before);
+    touchDrag.targetLi = target;
+    touchDrag.before = before;
+  });
+  function finalizeTouchReorder(){
+    if (!touchDrag.active) return;
+    const draggedId = touchDrag.id;
+    const liDragging = listEl.querySelector(`li.card[data-id="${draggedId}"]`);
+    if (liDragging) liDragging.classList.remove('dragging');
+    if (!touchDrag.targetLi) { cleanupTouchDrag(); return; }
+    const allow = allowManualReorder();
+    if (!allow) { cleanupTouchDrag(); return; }
+    const targetId = touchDrag.targetLi.getAttribute('data-id');
+    const before = touchDrag.before;
+    // compute new order based on visibleItems
+    const ids = (visibleItems||[]).map(x=>x.id);
+    const srcIdx = ids.indexOf(draggedId);
+    if (srcIdx >= 0){
+      ids.splice(srcIdx,1);
+      const destIdxBase = ids.indexOf(targetId);
+      let insertAt = destIdxBase + (before? 0 : 1);
+      if (insertAt < 0) insertAt = 0; if (insertAt > ids.length) insertAt = ids.length;
+      ids.splice(insertAt, 0, draggedId);
+      orderMap[folderKey()] = ids.slice();
+      db.setSettings({ manualOrder: orderMap });
+      renderList(searchInput.value);
+    }
+    cleanupTouchDrag();
+  }
+  listEl.addEventListener('pointerup', (e)=>{ cancelLongPress(); if (touchDrag.active) finalizeTouchReorder(); });
+  listEl.addEventListener('pointercancel', (e)=>{ cancelLongPress(); cleanupTouchDrag(); });
+  listEl.addEventListener('pointerleave', (e)=>{ cancelLongPress(); });
   // Drag & Drop: track -> folder
   listEl.addEventListener('dragstart', (e)=>{
     const li = e.target.closest('li.card[data-id]');
