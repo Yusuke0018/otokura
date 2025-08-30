@@ -19,6 +19,8 @@ async function boot() {
   const fileInput = root.querySelector('#fileInput');
   const playFromTopBtn = root.querySelector('#playFromTop');
   const searchInput = root.querySelector('#search');
+  const shuffleModeBtn = root.querySelector('#shuffleMode');
+  const shufflePlayBtn = root.querySelector('#shufflePlay');
   const listEl = root.querySelector('#trackList');
   const playerEl = root.querySelector('#player');
   const folderListEl = root.querySelector('#folderList');
@@ -49,6 +51,14 @@ async function boot() {
   const syncReorderToggle = () => { if (reorderToggleBtn) reorderToggleBtn.setAttribute('aria-pressed', (sortKey==='manual')?'true':'false'); };
   syncReorderToggle();
   let reorderPrevSortKey = (sortKey==='manual') ? 'addedAt' : sortKey;
+  const syncToolbarShuffle = () => { if (shuffleModeBtn) shuffleModeBtn.setAttribute('aria-pressed', shuffle ? 'true' : 'false'); };
+  syncToolbarShuffle();
+  const syncPlayerShuffle = () => {
+    try {
+      const btn = playerEl.querySelector('[data-ctl="shuffle"]');
+      if (btn) btn.setAttribute('aria-pressed', shuffle ? 'true' : 'false');
+    } catch {}
+  };
 
   function ensurePlayerUI() {
     if (!audio) {
@@ -698,6 +708,29 @@ async function boot() {
     playFromTopBtn.addEventListener('click', async ()=>{
       if (!visibleItems.length){ toast('再生できる項目がありません'); return; }
       await loadTrackById(visibleItems[0].id, true);
+    });
+  }
+  // シャッフルモード（モバイル向けトグル）
+  if (shuffleModeBtn){
+    shuffleModeBtn.addEventListener('click', async ()=>{
+      shuffle = !shuffle;
+      await db.setSettings({ shuffle });
+      syncToolbarShuffle();
+      syncPlayerShuffle();
+      toast(shuffle ? 'シャッフルON' : 'シャッフルOFF');
+    });
+  }
+  // シャッフル再生（表示対象からランダムに開始）
+  if (shufflePlayBtn){
+    shufflePlayBtn.addEventListener('click', async ()=>{
+      if (!visibleItems.length){ toast('再生できる項目がありません'); return; }
+      shuffle = true; // 明示的にON
+      await db.setSettings({ shuffle });
+      syncToolbarShuffle();
+      syncPlayerShuffle();
+      const ids = visibleItems.map(x=>x.id);
+      const pick = ids[Math.floor(Math.random() * ids.length)];
+      await loadTrackById(pick, true);
     });
   }
   // 並び替えトグル（モバイル向けボタン）

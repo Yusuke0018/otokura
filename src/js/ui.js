@@ -17,6 +17,8 @@ export function renderShell(root){
           <button id="importBtn" class="btn primary">取り込み</button>
           <button id="reorderToggle" class="btn" aria-pressed="false" title="手動並び替えモード">並び替え</button>
           <button id="playFromTop" class="btn" title="先頭から再生">先頭から再生</button>
+          <button id="shuffleMode" class="btn toggle" aria-pressed="false" title="シャッフルモード（フォルダ内）">シャッフル</button>
+          <button id="shufflePlay" class="btn" title="シャッフル再生（表示対象からランダム）">シャッフル再生</button>
           <label class="sr-only" for="sortKey">並び替え</label>
           <select id="sortKey" class="input">
             <option value="addedAt">追加日時</option>
