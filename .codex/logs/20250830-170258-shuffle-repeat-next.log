@@ -1,0 +1,7 @@
+Task: シャッフル/リピートと「次に再生」の追加
+Timestamp: 2025-08-30T08:02:58Z
+Branch: main
+Before: fa69982
+Diff:  6 files changed, 61 insertions(+), 10 deletions(-)
+Tests: (なし)
+Lint: 実行済み (警告のみ)

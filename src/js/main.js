@@ -38,18 +38,27 @@ async function boot() {
   let sortDir = settings.sortDir || 'desc';
   let currentFolderId = null;
   let queue = [];
+  let shuffle = !!settings.shuffle;
+  let repeatOne = !!settings.repeatOne;
   if (sortKeySel) sortKeySel.value = sortKey;
   if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
+
+  function syncToggleUI(){
+    try {
+      if (queueShuffleBtn) queueShuffleBtn.setAttribute('aria-pressed', shuffle ? 'true' : 'false');
+      if (queueRepeatBtn) queueRepeatBtn.setAttribute('aria-pressed', repeatOne ? 'true' : 'false');
+    } catch {}
+  }
+  syncToggleUI();
 
   async function renderQueue(){
     try {
       if (!queuePanel || !queueListEl) return;
+      queuePanel.hidden = false;
       if (queue.length === 0){
-        queuePanel.hidden = true;
         queueListEl.innerHTML = '';
         return;
       }
-      queuePanel.hidden = false;
       const tracks = await db.listTracks();
       const lookup = new Map(tracks.map(t => [t.id, t]));
       const items = queue
@@ -72,6 +81,14 @@ async function boot() {
     queue.push(id);
     renderQueue();
     toast('キューに追加しました。');
+  }
+
+  function playNext(id){
+    if (!id) return;
+    queue = queue.filter(x => x !== id);
+    queue.unshift(id);
+    renderQueue();
+    toast('「次に再生」に追加しました。');
   }
 
   function ensurePlayerUI() {
@@ -185,9 +202,10 @@ async function boot() {
           <button class="btn icon on-mobile" data-action="rename" aria-label="ファイル名変更">✎</button>
           <button class="btn icon on-mobile" data-action="delete" aria-label="削除">🗑</button>
           <button class="btn icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
-          <div class="menu" role="menu">
+           <div class="menu" role="menu">
             <button class="menu-item" data-action="play">再生</button>
             <button class="menu-item" data-action="enqueue">キューに追加</button>
+            <button class="menu-item" data-action="playNext">次に再生</button>
             <button class="menu-item" data-action="move">移動</button>
             <button class="menu-item" data-action="rename">ファイル名変更</button>
             <button class="menu-item" data-action="info">情報</button>
@@ -248,9 +266,20 @@ async function boot() {
       const st = await db.getPlayStats(id);
       await db.setPlayStats(id, { ...st, lastPositionMs: 0, lastPlayedAt: Date.now() });
       renderList(searchInput.value);
-      // キューに次があれば自動再生
+      // リピート（1曲）
+      if (repeatOne) {
+        await loadTrackById(id, true);
+        return;
+      }
+      // キューに次があれば自動再生（シャッフル対応）
       if (queue.length > 0) {
-        const nextId = queue.shift();
+        let nextId = null;
+        if (shuffle) {
+          const r = Math.floor(Math.random() * queue.length);
+          nextId = queue.splice(r, 1)[0];
+        } else {
+          nextId = queue.shift();
+        }
         await renderQueue();
         if (nextId) await loadTrackById(nextId, true);
       }
@@ -303,6 +332,8 @@ async function boot() {
       loadTrackById(id, true);
     } else if (btn.dataset.action === 'enqueue') {
       enqueue(id);
+    } else if (btn.dataset.action === 'playNext') {
+      playNext(id);
     } else if (btn.dataset.action === 'info') {
       handleInfo(id);
     } else if (btn.dataset.action === 'move') {
@@ -386,6 +417,20 @@ async function boot() {
   // Queue interactions
   if (queueClearBtn){
     queueClearBtn.addEventListener('click', ()=>{ queue = []; renderQueue(); });
+  }
+  if (queueShuffleBtn){
+    queueShuffleBtn.addEventListener('click', async ()=>{
+      shuffle = !shuffle;
+      syncToggleUI();
+      await db.setSettings({ shuffle });
+    });
+  }
+  if (queueRepeatBtn){
+    queueRepeatBtn.addEventListener('click', async ()=>{
+      repeatOne = !repeatOne;
+      syncToggleUI();
+      await db.setSettings({ repeatOne });
+    });
   }
   if (queueListEl){
     queueListEl.addEventListener('click', (e)=>{

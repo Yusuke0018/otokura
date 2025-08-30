@@ -31,6 +31,8 @@ export function renderShell(root){
           <header class="queue-head">
             <div class="q-title">再生キュー</div>
             <div class="q-actions">
+              <button id="queueShuffle" class="btn toggle" aria-pressed="false" title="シャッフル">シャッフル</button>
+              <button id="queueRepeat" class="btn toggle" aria-pressed="false" title="リピート（1曲）">リピート</button>
               <button id="queueClear" class="btn" title="キューを空にする">クリア</button>
             </div>
           </header>

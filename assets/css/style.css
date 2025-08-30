@@ -79,3 +79,6 @@ main{max-width:980px;margin:0 auto;padding:20px}
 @media (prefers-color-scheme:dark){
   .q-item{background:linear-gradient(180deg,#101828,#0f172a)}
 }
+
+/* Toggle buttons */
+.btn.toggle[aria-pressed="true"]{background:linear-gradient(180deg, #0b73f6, #085ad4); color:#fff; border-color:transparent}

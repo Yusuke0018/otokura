@@ -1,5 +1,5 @@
 // 音蔵 Service Worker (cache bust by VERSION)
-const VERSION = '20250830164501';
+const VERSION = '20250830170530';
 const CACHE_NAME = `otokura-v${VERSION}`;
 const CORE = [
   '/',
