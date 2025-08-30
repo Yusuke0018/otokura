@@ -17,6 +17,7 @@ async function boot() {
   }
 
   const fileInput = root.querySelector('#fileInput');
+  const rescanBtn = root.querySelector('#rescanBtn');
   const searchInput = root.querySelector('#search');
   const listEl = root.querySelector('#trackList');
   const playerEl = root.querySelector('#player');
@@ -631,6 +632,47 @@ async function boot() {
 
   searchInput.addEventListener('input', () => renderList(searchInput.value));
 
+  async function maybeRebuildLibrary() {
+    try {
+      const tracks = await db.listTracks();
+      if ((tracks?.length || 0) > 0) return;
+      const files = await storage.listFiles();
+      if ((files?.length || 0) === 0) return;
+      const ok = confirm(`保存済みのファイルは見つかりました（${files.length} 件）。ライブラリ情報を再構築しますか？`);
+      if (!ok) return;
+      let added = 0;
+      for (const f of files) {
+        try {
+          const name = f.name || f;
+          const blob = await storage.getFile(name);
+          if (!blob) continue;
+          const t = {
+            id: (self.crypto?.randomUUID?.() || (`t_${Date.now()}_${Math.random().toString(36).slice(2)}`)),
+            path: name,
+            displayName: String(name).replace(/\.[Ww][Aa][Vv]$/, ''),
+            durationMs: 0,
+            size: blob.size || 0,
+            addedAt: Date.now(),
+            updatedAt: Date.now(),
+            folderId: null,
+          };
+          await db.addTrack(t);
+          added++;
+        } catch {}
+      }
+      if (added > 0) {
+        toast(`${added} 件のライブラリを再構築しました。`);
+        await renderList(searchInput.value);
+      }
+    } catch {}
+  }
+
+  if (rescanBtn) {
+    rescanBtn.addEventListener('click', async ()=>{
+      await maybeRebuildLibrary();
+    });
+  }
+
   if (sortKeySel) sortKeySel.addEventListener('change', async ()=>{
     sortKey = sortKeySel.value;
     await db.setSettings({ sortKey });
@@ -645,6 +687,7 @@ async function boot() {
 
   await renderFolders();
   await renderList();
+  await maybeRebuildLibrary();
   await renderQueue();
 }
 

@@ -15,6 +15,7 @@ export function renderShell(root){
         <div class="toolbar" role="toolbar" aria-label="ライブラリ操作">
           <input id="fileInput" class="sr-only" type="file" accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave" multiple>
           <button id="importBtn" class="btn primary">取り込み</button>
+          <button id="rescanBtn" class="btn" title="ストレージから再スキャン">再スキャン</button>
           <label class="sr-only" for="sortKey">並び替え</label>
           <select id="sortKey" class="input">
             <option value="addedAt">追加日時</option>
