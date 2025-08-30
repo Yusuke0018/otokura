@@ -24,6 +24,7 @@ async function boot() {
   const folderListEl = root.querySelector('#folderList');
   const newFolderBtn = root.querySelector('#newFolder');
   const sortKeySel = root.querySelector('#sortKey');
+  const reorderToggleBtn = root.querySelector('#reorderToggle');
   const sortDirBtn = root.querySelector('#sortDir');
 
   let audio = null;
@@ -45,6 +46,9 @@ async function boot() {
   const folderKey = () => (currentFolderId || 'root');
   if (sortKeySel) sortKeySel.value = sortKey;
   if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
+  const syncReorderToggle = () => { if (reorderToggleBtn) reorderToggleBtn.setAttribute('aria-pressed', (sortKey==='manual')?'true':'false'); };
+  syncReorderToggle();
+  let reorderPrevSortKey = (sortKey==='manual') ? 'addedAt' : sortKey;
 
   function ensurePlayerUI() {
     if (!audio) {
@@ -678,6 +682,7 @@ async function boot() {
     sortKey = sortKeySel.value;
     await db.setSettings({ sortKey });
     renderList(searchInput.value);
+    syncReorderToggle();
   });
   if (sortDirBtn) sortDirBtn.addEventListener('click', async ()=>{
     sortDir = (sortDir==='desc') ? 'asc' : 'desc';
@@ -693,6 +698,27 @@ async function boot() {
     playFromTopBtn.addEventListener('click', async ()=>{
       if (!visibleItems.length){ toast('再生できる項目がありません'); return; }
       await loadTrackById(visibleItems[0].id, true);
+    });
+  }
+  // 並び替えトグル（モバイル向けボタン）
+  if (reorderToggleBtn){
+    reorderToggleBtn.addEventListener('click', async ()=>{
+      if (sortKey !== 'manual'){
+        reorderPrevSortKey = sortKey;
+        sortKey = 'manual';
+        if (sortKeySel) sortKeySel.value = 'manual';
+        await db.setSettings({ sortKey });
+        await renderList(searchInput.value);
+        syncReorderToggle();
+        toast('手動並び替えモードです。長押し→ドラッグで順序変更。検索中は無効です。');
+      } else {
+        // 直前のキーに戻す
+        sortKey = reorderPrevSortKey || 'addedAt';
+        if (sortKeySel) sortKeySel.value = sortKey;
+        await db.setSettings({ sortKey });
+        await renderList(searchInput.value);
+        syncReorderToggle();
+      }
     });
   }
 }

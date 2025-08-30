@@ -15,6 +15,7 @@ export function renderShell(root){
         <div class="toolbar" role="toolbar" aria-label="ライブラリ操作">
           <input id="fileInput" class="sr-only" type="file" accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave" multiple>
           <button id="importBtn" class="btn primary">取り込み</button>
+          <button id="reorderToggle" class="btn" aria-pressed="false" title="手動並び替えモード">並び替え</button>
           <button id="playFromTop" class="btn" title="先頭から再生">先頭から再生</button>
           <label class="sr-only" for="sortKey">並び替え</label>
           <select id="sortKey" class="input">
