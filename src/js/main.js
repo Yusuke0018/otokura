@@ -635,7 +635,11 @@ async function boot() {
   async function maybeRebuildLibrary() {
     try {
       const tracks = await db.listTracks();
-      if ((tracks?.length || 0) > 0) return;
+      const existingPaths = new Set((tracks||[]).map(t => t.path));
+      if ((tracks?.length || 0) > 0) {
+        // 既存がある場合は自動復元しない（手動のみ）
+        return;
+      }
       const files = await storage.listFiles();
       if ((files?.length || 0) === 0) return;
       const ok = confirm(`保存済みのファイルは見つかりました（${files.length} 件）。ライブラリ情報を再構築しますか？`);
@@ -644,6 +648,7 @@ async function boot() {
       for (const f of files) {
         try {
           const name = f.name || f;
+          if (existingPaths.has(name)) continue;
           const blob = await storage.getFile(name);
           if (!blob) continue;
           const t = {
