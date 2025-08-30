@@ -78,6 +78,7 @@ export const db = {
       shuffle: false,
       repeatAll: false,
       stopAfterCurrent: false,
+      manualOrder: {},
     };
     const val = await withStore('settings', 'readonly', s => new Promise((res, rej)=>{
       const r = s.get('singleton'); r.onsuccess=()=>res(r.result||def); r.onerror=()=>rej(r.error);

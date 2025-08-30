@@ -36,6 +36,8 @@ main{max-width:980px;margin:0 auto;padding:20px}
 .card{position:relative;display:flex;flex-direction:column;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 3px #0002;overflow:hidden}
 .card[draggable=true]{cursor:grab}
 .card.dragging{opacity:.6;filter:saturate(.9)}
+.card.drop-before{box-shadow: inset 0 3px 0 0 var(--accent)}
+.card.drop-after{box-shadow: inset 0 -3px 0 0 var(--accent)}
 .card-body{padding:14px 14px 8px 14px;cursor:pointer}
 .card-body:hover{background:linear-gradient(180deg,#0b73f605,transparent)}
 .card-title{font-weight:600;letter-spacing:.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

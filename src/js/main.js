@@ -17,6 +17,7 @@ async function boot() {
   }
 
   const fileInput = root.querySelector('#fileInput');
+  const playFromTopBtn = root.querySelector('#playFromTop');
   const searchInput = root.querySelector('#search');
   const listEl = root.querySelector('#trackList');
   const playerEl = root.querySelector('#player');
@@ -39,6 +40,9 @@ async function boot() {
   let repeatAll = !!settings.repeatAll;
   let stopAfter = !!settings.stopAfterCurrent;
   let visibleItems = [];
+  let nextUpId = null; // 「次に再生」指定
+  let orderMap = settings.manualOrder || {};
+  const folderKey = () => (currentFolderId || 'root');
   if (sortKeySel) sortKeySel.value = sortKey;
   if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
 
@@ -129,7 +133,19 @@ async function boot() {
       durationMs: t.durationMs || 0,
     }));
     const dirMul = (sortDir==='desc') ? -1 : 1;
-    if (sortKey === 'popular') {
+    if (sortKey === 'manual' && !q) {
+      const ord = orderMap[folderKey()] || [];
+      const idx = new Map(ord.map((id,i)=>[id,i]));
+      items.sort((a,b)=>{
+        const ia = idx.has(a.id) ? idx.get(a.id) : 1e9;
+        const ib = idx.has(b.id) ? idx.get(b.id) : 1e9;
+        if (ia !== ib) return ia - ib;
+        // fallback to addedAt
+        if (a.addedAt < b.addedAt) return -1 * dirMul;
+        if (a.addedAt > b.addedAt) return 1 * dirMul;
+        return 0;
+      });
+    } else if (sortKey === 'popular') {
       items.sort((a,b)=>{
         if ((b.playCount|0) !== (a.playCount|0)) return (b.playCount|0) - (a.playCount|0);
         return (b.lastPlayedAt|0) - (a.lastPlayedAt|0);
@@ -172,6 +188,7 @@ async function boot() {
           <button class="btn icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
           <div class="menu" role="menu">
             <button class="menu-item" data-action="play">再生</button>
+            <button class="menu-item" data-action="playNext">次に再生</button>
             <button class="menu-item" data-action="move">移動</button>
             <button class="menu-item" data-action="rename">ファイル名変更</button>
             <button class="menu-item" data-action="info">情報</button>
@@ -233,6 +250,7 @@ async function boot() {
       await db.setPlayStats(id, { ...st, lastPositionMs: 0, lastPlayedAt: Date.now() });
       renderList(searchInput.value);
       if (stopAfter) return;
+      if (nextUpId) { const nid = nextUpId; nextUpId = null; await loadTrackById(nid, true); return; }
       const ids = (visibleItems||[]).map(x => x.id);
       if (!ids.length) return;
       let nextId = null;
@@ -296,6 +314,9 @@ async function boot() {
     const id = li.getAttribute('data-id');
     if (btn.dataset.action === 'play') {
       loadTrackById(id, true);
+    } else if (btn.dataset.action === 'playNext') {
+      nextUpId = id;
+      toast('次に再生に設定しました');
     } else if (btn.dataset.action === 'info') {
       handleInfo(id);
     } else if (btn.dataset.action === 'move') {
@@ -331,6 +352,51 @@ async function boot() {
   listEl.addEventListener('dragend', (e)=>{
     const li = e.target.closest('li.card.dragging');
     if (li) li.classList.remove('dragging');
+    // clear any drop markers
+    for (const el of listEl.querySelectorAll('.drop-before,.drop-after')) el.classList.remove('drop-before','drop-after');
+  });
+
+  // Reorder within list (manual sort)
+  listEl.addEventListener('dragover', (e)=>{
+    const li = e.target.closest('li.card[data-id]');
+    if (!li) return;
+    const allow = (sortKey === 'manual') && !String(searchInput.value||'').trim();
+    if (!allow) { e.dataTransfer.dropEffect = 'none'; return; }
+    e.preventDefault();
+    const rect = li.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height/2;
+    li.classList.toggle('drop-before', before);
+    li.classList.toggle('drop-after', !before);
+  });
+  listEl.addEventListener('dragleave', (e)=>{
+    const li = e.target.closest('li.card[data-id]');
+    if (li) li.classList.remove('drop-before','drop-after');
+  });
+  listEl.addEventListener('drop', async (e)=>{
+    const target = e.target.closest('li.card[data-id]');
+    if (!target) return;
+    const draggedId = e.dataTransfer.getData('text/plain');
+    if (!draggedId) return;
+    const allow = (sortKey === 'manual') && !String(searchInput.value||'').trim();
+    if (!allow) { toast('並び替えは「手動」かつ検索なしの時に有効です。'); return; }
+    e.preventDefault();
+    const targetId = target.getAttribute('data-id');
+    const before = target.classList.contains('drop-before');
+    // compute new order
+    const ids = (visibleItems||[]).map(x=>x.id);
+    const srcIdx = ids.indexOf(draggedId);
+    if (srcIdx < 0) return;
+    ids.splice(srcIdx,1);
+    const destIdxBase = ids.indexOf(targetId);
+    let insertAt = destIdxBase + (before? 0 : 1);
+    if (insertAt < 0) insertAt = 0;
+    if (insertAt > ids.length) insertAt = ids.length;
+    ids.splice(insertAt, 0, draggedId);
+    orderMap[folderKey()] = ids.slice();
+    await db.setSettings({ manualOrder: orderMap });
+    // clear markers and re-render
+    for (const el of listEl.querySelectorAll('.drop-before,.drop-after')) el.classList.remove('drop-before','drop-after');
+    await renderList(searchInput.value);
   });
 
   folderListEl.addEventListener('dragover', (e)=>{
@@ -567,6 +633,13 @@ async function boot() {
 
   await renderFolders();
   await renderList();
+  // 先頭から再生
+  if (playFromTopBtn){
+    playFromTopBtn.addEventListener('click', async ()=>{
+      if (!visibleItems.length){ toast('再生できる項目がありません'); return; }
+      await loadTrackById(visibleItems[0].id, true);
+    });
+  }
 }
 
 document.addEventListener('DOMContentLoaded', boot);
