@@ -17,13 +17,9 @@ async function boot() {
   }
 
   const fileInput = root.querySelector('#fileInput');
-  const rescanBtn = root.querySelector('#rescanBtn');
   const searchInput = root.querySelector('#search');
   const listEl = root.querySelector('#trackList');
   const playerEl = root.querySelector('#player');
-  const queuePanel = root.querySelector('#queuePanel');
-  const queueListEl = root.querySelector('#queueList');
-  const queueClearBtn = root.querySelector('#queueClear');
   const folderListEl = root.querySelector('#folderList');
   const newFolderBtn = root.querySelector('#newFolder');
   const sortKeySel = root.querySelector('#sortKey');
@@ -38,59 +34,8 @@ async function boot() {
   let sortKey = settings.sortKey || 'addedAt';
   let sortDir = settings.sortDir || 'desc';
   let currentFolderId = null;
-  let queue = [];
-  let shuffle = !!settings.shuffle;
-  let repeatOne = !!settings.repeatOne;
   if (sortKeySel) sortKeySel.value = sortKey;
   if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
-
-  function syncToggleUI(){
-    try {
-      if (queueShuffleBtn) queueShuffleBtn.setAttribute('aria-pressed', shuffle ? 'true' : 'false');
-      if (queueRepeatBtn) queueRepeatBtn.setAttribute('aria-pressed', repeatOne ? 'true' : 'false');
-    } catch {}
-  }
-  syncToggleUI();
-
-  async function renderQueue(){
-    try {
-      if (!queuePanel || !queueListEl) return;
-      queuePanel.hidden = false;
-      if (queue.length === 0){
-        queueListEl.innerHTML = '';
-        return;
-      }
-      const tracks = await db.listTracks();
-      const lookup = new Map(tracks.map(t => [t.id, t]));
-      const items = queue
-        .map(id => ({ id, name: (lookup.get(id)?.displayName || lookup.get(id)?.path || '(不明)') }))
-        .filter(x => x.id);
-      queueListEl.innerHTML = items.map(item => `
-        <li class="q-item" data-id="${item.id}">
-          <span class="q-name">${item.name}</span>
-          <span class="q-actions">
-            <button class="btn" data-act="playNow">今すぐ</button>
-            <button class="btn" data-act="remove">削除</button>
-          </span>
-        </li>
-      `).join('');
-    } catch {}
-  }
-
-  function enqueue(id){
-    if (!id) return;
-    queue.push(id);
-    renderQueue();
-    toast('キューに追加しました。');
-  }
-
-  function playNext(id){
-    if (!id) return;
-    queue = queue.filter(x => x !== id);
-    queue.unshift(id);
-    renderQueue();
-    toast('「次に再生」に追加しました。');
-  }
 
   function ensurePlayerUI() {
     if (!audio) {
@@ -203,10 +148,8 @@ async function boot() {
           <button class="btn icon on-mobile" data-action="rename" aria-label="ファイル名変更">✎</button>
           <button class="btn icon on-mobile" data-action="delete" aria-label="削除">🗑</button>
           <button class="btn icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
-           <div class="menu" role="menu">
+          <div class="menu" role="menu">
             <button class="menu-item" data-action="play">再生</button>
-            <button class="menu-item" data-action="enqueue">キューに追加</button>
-            <button class="menu-item" data-action="playNext">次に再生</button>
             <button class="menu-item" data-action="move">移動</button>
             <button class="menu-item" data-action="rename">ファイル名変更</button>
             <button class="menu-item" data-action="info">情報</button>
@@ -267,23 +210,6 @@ async function boot() {
       const st = await db.getPlayStats(id);
       await db.setPlayStats(id, { ...st, lastPositionMs: 0, lastPlayedAt: Date.now() });
       renderList(searchInput.value);
-      // リピート（1曲）
-      if (repeatOne) {
-        await loadTrackById(id, true);
-        return;
-      }
-      // キューに次があれば自動再生（シャッフル対応）
-      if (queue.length > 0) {
-        let nextId = null;
-        if (shuffle) {
-          const r = Math.floor(Math.random() * queue.length);
-          nextId = queue.splice(r, 1)[0];
-        } else {
-          nextId = queue.shift();
-        }
-        await renderQueue();
-        if (nextId) await loadTrackById(nextId, true);
-      }
     };
 
     audio.onerror = () => {
@@ -331,10 +257,6 @@ async function boot() {
     const id = li.getAttribute('data-id');
     if (btn.dataset.action === 'play') {
       loadTrackById(id, true);
-    } else if (btn.dataset.action === 'enqueue') {
-      enqueue(id);
-    } else if (btn.dataset.action === 'playNext') {
-      playNext(id);
     } else if (btn.dataset.action === 'info') {
       handleInfo(id);
     } else if (btn.dataset.action === 'move') {
@@ -413,43 +335,6 @@ async function boot() {
         </span>` : ''}
       </li>
     `).join('');
-  }
-
-  // Queue interactions
-  if (queueClearBtn){
-    queueClearBtn.addEventListener('click', ()=>{ queue = []; renderQueue(); });
-  }
-  if (queueShuffleBtn){
-    queueShuffleBtn.addEventListener('click', async ()=>{
-      shuffle = !shuffle;
-      syncToggleUI();
-      await db.setSettings({ shuffle });
-    });
-  }
-  if (queueRepeatBtn){
-    queueRepeatBtn.addEventListener('click', async ()=>{
-      repeatOne = !repeatOne;
-      syncToggleUI();
-      await db.setSettings({ repeatOne });
-    });
-  }
-  if (queueListEl){
-    queueListEl.addEventListener('click', (e)=>{
-      const li = e.target.closest('li.q-item[data-id]');
-      if (!li) return;
-      const id = li.getAttribute('data-id');
-      const actBtn = e.target.closest('button[data-act]');
-      if (!actBtn) return;
-      const act = actBtn.dataset.act;
-      if (act === 'remove'){
-        queue = queue.filter(x => x !== id);
-        renderQueue();
-      } else if (act === 'playNow'){
-        queue = queue.filter(x => x !== id);
-        renderQueue();
-        loadTrackById(id, true);
-      }
-    });
   }
 
   folderListEl.addEventListener('click', async (e)=>{
@@ -563,9 +448,6 @@ async function boot() {
     } catch { showError('実体ファイルの削除に失敗しました。'); }
     await db.removeTrack(id);
     await db.removePlayStats(id);
-    // キューからも除去
-    queue = queue.filter(x => x !== id);
-    renderQueue();
     renderList(searchInput.value);
     toast('削除しました。');
   }
@@ -632,52 +514,6 @@ async function boot() {
 
   searchInput.addEventListener('input', () => renderList(searchInput.value));
 
-  async function maybeRebuildLibrary(force = false) {
-    try {
-      const tracks = await db.listTracks();
-      const existingPaths = new Set((tracks||[]).map(t => t.path));
-      if (!force && (tracks?.length || 0) > 0) {
-        // 既存がある場合は自動復元しない（手動のみ）
-        return;
-      }
-      const files = await storage.listFiles();
-      if ((files?.length || 0) === 0) return;
-      const ok = confirm(`保存済みのファイルは見つかりました（${files.length} 件）。ライブラリ情報を再構築しますか？`);
-      if (!ok) return;
-      let added = 0;
-      for (const f of files) {
-        try {
-          const name = f.name || f;
-          if (existingPaths.has(name)) continue;
-          const blob = await storage.getFile(name);
-          if (!blob) continue;
-          const t = {
-            id: (self.crypto?.randomUUID?.() || (`t_${Date.now()}_${Math.random().toString(36).slice(2)}`)),
-            path: name,
-            displayName: String(name).replace(/\.[Ww][Aa][Vv]$/, ''),
-            durationMs: 0,
-            size: blob.size || 0,
-            addedAt: Date.now(),
-            updatedAt: Date.now(),
-            folderId: null,
-          };
-          await db.addTrack(t);
-          added++;
-        } catch {}
-      }
-      if (added > 0) {
-        toast(`${added} 件のライブラリを再構築しました。`);
-        await renderList(searchInput.value);
-      }
-    } catch {}
-  }
-
-  if (rescanBtn) {
-    rescanBtn.addEventListener('click', async ()=>{
-      await maybeRebuildLibrary(true);
-    });
-  }
-
   if (sortKeySel) sortKeySel.addEventListener('change', async ()=>{
     sortKey = sortKeySel.value;
     await db.setSettings({ sortKey });
@@ -692,8 +528,6 @@ async function boot() {
 
   await renderFolders();
   await renderList();
-  await maybeRebuildLibrary();
-  await renderQueue();
 }
 
 document.addEventListener('DOMContentLoaded', boot);

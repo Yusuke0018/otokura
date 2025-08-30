@@ -1,8 +1,0 @@
-Task: ライブラリ再スキャン/自動復元の追加
-Timestamp: 2025-08-30T08:05:43Z
-Branch: main
-Before: bfaf339
-Diff:  3 files changed, 45 insertions(+)
-Tests: (なし)
-Lint: 実行済み (警告のみ)
-Pushed: d986772

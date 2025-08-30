@@ -1,22 +1,19 @@
 // 音蔵 Service Worker (cache bust by VERSION)
-const VERSION = '20250830174020';
+const VERSION = '20250829213002';
 const CACHE_NAME = `otokura-v${VERSION}`;
-// scope 対応: GitHub Pages のサブパスでも動くように、登録スコープ基準でパスを組み立て
-const SCOPE = (self.registration && self.registration.scope) || '/';
-const base = (p) => new URL(p, SCOPE).pathname + (p.includes('?') ? '' : `?v=${VERSION}`);
 const CORE = [
-  new URL('.', SCOPE).pathname, // スコープ直下
-  base('index.html'),
-  base('assets/css/style.css'),
-  base('src/js/main.js'),
-  base('src/js/ui.js'),
-  base('src/js/storage.js'),
-  base('src/js/db.js'),
-  base('src/js/metrics.js'),
-  base('src/js/player.js'),
-  base('manifest.webmanifest'),
-  base('assets/icons/icon-192.png'),
-  base('assets/icons/icon-512.png'),
+  '/',
+  `/index.html?v=${VERSION}`,
+  `/assets/css/style.css?v=${VERSION}`,
+  `/src/js/main.js?v=${VERSION}`,
+  `/src/js/ui.js?v=${VERSION}`,
+  `/src/js/storage.js?v=${VERSION}`,
+  `/src/js/db.js?v=${VERSION}`,
+  `/src/js/metrics.js?v=${VERSION}`,
+  `/src/js/player.js?v=${VERSION}`,
+  `/manifest.webmanifest?v=${VERSION}`,
+  `/assets/icons/icon-192.png?v=${VERSION}`,
+  `/assets/icons/icon-512.png?v=${VERSION}`,
 ];
 
 self.addEventListener('install', (e) => {
@@ -47,10 +44,11 @@ self.addEventListener('fetch', (e) => {
       } catch {
         const match = await caches.match(e.request, { ignoreSearch: false });
         if (match) return match;
-        // fallback to scope-relative index for navigation
-        if (e.request.mode === 'navigate') return caches.match(base('index.html'));
+        // fallback to index for navigation
+        if (e.request.mode === 'navigate') return caches.match(`/index.html?v=${VERSION}`);
         throw new Error('offline');
       }
     })());
   }
 });
+
