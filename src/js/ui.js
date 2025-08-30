@@ -27,6 +27,15 @@ export function renderShell(root){
         </div>
         <ul id="trackList" class="list cards" aria-label="トラック一覧"></ul>
         <div id="player" class="player" aria-label="プレイヤー領域"></div>
+        <section id="queuePanel" class="queue-panel" aria-label="再生キュー" hidden>
+          <header class="queue-head">
+            <div class="q-title">再生キュー</div>
+            <div class="q-actions">
+              <button id="queueClear" class="btn" title="キューを空にする">クリア</button>
+            </div>
+          </header>
+          <ul id="queueList" class="list q-list" aria-label="キュー一覧"></ul>
+        </section>
       </section>
     </div>
     <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>

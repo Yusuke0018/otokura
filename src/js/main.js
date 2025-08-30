@@ -20,6 +20,9 @@ async function boot() {
   const searchInput = root.querySelector('#search');
   const listEl = root.querySelector('#trackList');
   const playerEl = root.querySelector('#player');
+  const queuePanel = root.querySelector('#queuePanel');
+  const queueListEl = root.querySelector('#queueList');
+  const queueClearBtn = root.querySelector('#queueClear');
   const folderListEl = root.querySelector('#folderList');
   const newFolderBtn = root.querySelector('#newFolder');
   const sortKeySel = root.querySelector('#sortKey');
@@ -34,8 +37,42 @@ async function boot() {
   let sortKey = settings.sortKey || 'addedAt';
   let sortDir = settings.sortDir || 'desc';
   let currentFolderId = null;
+  let queue = [];
   if (sortKeySel) sortKeySel.value = sortKey;
   if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
+
+  async function renderQueue(){
+    try {
+      if (!queuePanel || !queueListEl) return;
+      if (queue.length === 0){
+        queuePanel.hidden = true;
+        queueListEl.innerHTML = '';
+        return;
+      }
+      queuePanel.hidden = false;
+      const tracks = await db.listTracks();
+      const lookup = new Map(tracks.map(t => [t.id, t]));
+      const items = queue
+        .map(id => ({ id, name: (lookup.get(id)?.displayName || lookup.get(id)?.path || '(不明)') }))
+        .filter(x => x.id);
+      queueListEl.innerHTML = items.map(item => `
+        <li class="q-item" data-id="${item.id}">
+          <span class="q-name">${item.name}</span>
+          <span class="q-actions">
+            <button class="btn" data-act="playNow">今すぐ</button>
+            <button class="btn" data-act="remove">削除</button>
+          </span>
+        </li>
+      `).join('');
+    } catch {}
+  }
+
+  function enqueue(id){
+    if (!id) return;
+    queue.push(id);
+    renderQueue();
+    toast('キューに追加しました。');
+  }
 
   function ensurePlayerUI() {
     if (!audio) {
@@ -150,6 +187,7 @@ async function boot() {
           <button class="btn icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
           <div class="menu" role="menu">
             <button class="menu-item" data-action="play">再生</button>
+            <button class="menu-item" data-action="enqueue">キューに追加</button>
             <button class="menu-item" data-action="move">移動</button>
             <button class="menu-item" data-action="rename">ファイル名変更</button>
             <button class="menu-item" data-action="info">情報</button>
@@ -210,6 +248,12 @@ async function boot() {
       const st = await db.getPlayStats(id);
       await db.setPlayStats(id, { ...st, lastPositionMs: 0, lastPlayedAt: Date.now() });
       renderList(searchInput.value);
+      // キューに次があれば自動再生
+      if (queue.length > 0) {
+        const nextId = queue.shift();
+        await renderQueue();
+        if (nextId) await loadTrackById(nextId, true);
+      }
     };
 
     audio.onerror = () => {
@@ -257,6 +301,8 @@ async function boot() {
     const id = li.getAttribute('data-id');
     if (btn.dataset.action === 'play') {
       loadTrackById(id, true);
+    } else if (btn.dataset.action === 'enqueue') {
+      enqueue(id);
     } else if (btn.dataset.action === 'info') {
       handleInfo(id);
     } else if (btn.dataset.action === 'move') {
@@ -335,6 +381,29 @@ async function boot() {
         </span>` : ''}
       </li>
     `).join('');
+  }
+
+  // Queue interactions
+  if (queueClearBtn){
+    queueClearBtn.addEventListener('click', ()=>{ queue = []; renderQueue(); });
+  }
+  if (queueListEl){
+    queueListEl.addEventListener('click', (e)=>{
+      const li = e.target.closest('li.q-item[data-id]');
+      if (!li) return;
+      const id = li.getAttribute('data-id');
+      const actBtn = e.target.closest('button[data-act]');
+      if (!actBtn) return;
+      const act = actBtn.dataset.act;
+      if (act === 'remove'){
+        queue = queue.filter(x => x !== id);
+        renderQueue();
+      } else if (act === 'playNow'){
+        queue = queue.filter(x => x !== id);
+        renderQueue();
+        loadTrackById(id, true);
+      }
+    });
   }
 
   folderListEl.addEventListener('click', async (e)=>{
@@ -448,6 +517,9 @@ async function boot() {
     } catch { showError('実体ファイルの削除に失敗しました。'); }
     await db.removeTrack(id);
     await db.removePlayStats(id);
+    // キューからも除去
+    queue = queue.filter(x => x !== id);
+    renderQueue();
     renderList(searchInput.value);
     toast('削除しました。');
   }
@@ -528,6 +600,7 @@ async function boot() {
 
   await renderFolders();
   await renderList();
+  await renderQueue();
 }
 
 document.addEventListener('DOMContentLoaded', boot);

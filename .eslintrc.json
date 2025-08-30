@@ -1,0 +1,24 @@
+{
+  "root": true,
+  "env": { "browser": true, "es2021": true },
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "module" },
+  "extends": ["eslint:recommended"],
+  "ignorePatterns": [
+    "node_modules/",
+    "assets/",
+    "docs/",
+    "*.md",
+    "*.json"
+  ],
+  "overrides": [
+    {
+      "files": ["sw.js"],
+      "env": { "serviceworker": true, "browser": true, "es2021": true }
+    }
+  ],
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-constant-condition": ["warn", { "checkLoops": false }]
+  }
+}
+
