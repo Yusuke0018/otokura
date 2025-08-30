@@ -632,11 +632,11 @@ async function boot() {
 
   searchInput.addEventListener('input', () => renderList(searchInput.value));
 
-  async function maybeRebuildLibrary() {
+  async function maybeRebuildLibrary(force = false) {
     try {
       const tracks = await db.listTracks();
       const existingPaths = new Set((tracks||[]).map(t => t.path));
-      if ((tracks?.length || 0) > 0) {
+      if (!force && (tracks?.length || 0) > 0) {
         // 既存がある場合は自動復元しない（手動のみ）
         return;
       }
@@ -674,7 +674,7 @@ async function boot() {
 
   if (rescanBtn) {
     rescanBtn.addEventListener('click', async ()=>{
-      await maybeRebuildLibrary();
+      await maybeRebuildLibrary(true);
     });
   }
 
