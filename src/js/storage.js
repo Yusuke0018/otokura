@@ -15,6 +15,10 @@ async function getDir(){
   catch { return root; }
 }
 
+async function getRootDir(){
+  return await navigator.storage.getDirectory();
+}
+
 async function opfsExists(dir, name){
   try { await dir.getFileHandle(name); return true; } catch { return false; }
 }
@@ -50,8 +54,18 @@ export const storage = {
   async exists(name){
     name = sanitize(name);
     if (supportsOPFS){
-      const dir = await getDir();
-      try { await dir.getFileHandle(name, { create: false }); return true; } catch { return false; }
+      // tracks 配下優先、なければルートも確認
+      try {
+        const dir = await getDir();
+        await dir.getFileHandle(name, { create: false });
+        return true;
+      } catch {}
+      try {
+        const root = await getRootDir();
+        await root.getFileHandle(name, { create: false });
+        return true;
+      } catch {}
+      return false;
     } else {
       const db = await openDB();
       return await new Promise((res)=>{
@@ -114,12 +128,20 @@ export const storage = {
   },
   async listFiles(){
     if (supportsOPFS){
-      const dir = await getDir();
-      const entries = [];
-      for await (const [name, handle] of dir.entries()){
-        if (handle.kind === 'file') entries.push({ name });
+      // 後方互換: ルート直下と tracks 配下の両方を列挙
+      const out = new Map();
+      const push = (name)=>{ if (!out.has(name)) out.set(name, { name }); };
+      const root = await getRootDir();
+      for await (const [name, handle] of root.entries()){
+        if (handle.kind === 'file') push(name);
       }
-      return entries;
+      try {
+        const tracks = await root.getDirectoryHandle('tracks', { create: false });
+        for await (const [name, handle] of tracks.entries()){
+          if (handle.kind === 'file') push(name);
+        }
+      } catch {}
+      return Array.from(out.values());
     } else {
       const db = await openDB();
       return await new Promise((res, rej)=>{
@@ -137,9 +159,15 @@ export const storage = {
   },
   async getFile(name){
     if (supportsOPFS){
-      const dir = await getDir();
-      const h = await dir.getFileHandle(name);
-      return await h.getFile();
+      // tracks 配下を優先し、無ければルート直下を試す
+      try {
+        const dir = await getDir();
+        const h = await dir.getFileHandle(name);
+        return await h.getFile();
+      } catch {}
+      const root = await getRootDir();
+      const h2 = await root.getFileHandle(name);
+      return await h2.getFile();
     } else {
       const db = await openDB();
       const meta = await new Promise((res, rej)=>{
@@ -170,14 +198,21 @@ export const storage = {
   async rename(oldName, newName){
     const unique = await ensureUniqueName(newName);
     if (supportsOPFS){
+      // src は tracks か root のどちらか
       const dir = await getDir();
-      const src = await dir.getFileHandle(oldName);
+      let src;
+      try { src = await dir.getFileHandle(oldName); }
+      catch {
+        const root = await getRootDir();
+        src = await root.getFileHandle(oldName);
+      }
       const dst = await dir.getFileHandle(unique, { create: true });
       const srcFile = await src.getFile();
       const ws = await dst.createWritable();
       await ws.write(srcFile);
       await ws.close();
-      await dir.removeEntry(oldName);
+      try { await dir.removeEntry(oldName); }
+      catch { try { const root = await getRootDir(); await root.removeEntry(oldName); } catch {} }
       return unique;
     } else {
       const db = await openDB();
@@ -214,15 +249,22 @@ export const storage = {
     const target = sanitize(newName);
     if (supportsOPFS){
       const dir = await getDir();
-      // 存在チェック
+      // 既存チェック（tracks 配下）
       try { await dir.getFileHandle(target, { create: false }); return null; } catch {}
-      const src = await dir.getFileHandle(oldName);
+      // src は tracks か root
+      let src;
+      try { src = await dir.getFileHandle(oldName); }
+      catch {
+        const root = await getRootDir();
+        src = await root.getFileHandle(oldName);
+      }
       const dst = await dir.getFileHandle(target, { create: true });
       const srcFile = await src.getFile();
       const ws = await dst.createWritable();
       await ws.write(srcFile);
       await ws.close();
-      await dir.removeEntry(oldName);
+      try { await dir.removeEntry(oldName); }
+      catch { try { const root = await getRootDir(); await root.removeEntry(oldName); } catch {} }
       return target;
     } else {
       const db = await openDB();
@@ -259,7 +301,8 @@ export const storage = {
   async remove(name){
     if (supportsOPFS){
       const dir = await getDir();
-      await dir.removeEntry(name);
+      try { await dir.removeEntry(name); }
+      catch { const root = await getRootDir(); await root.removeEntry(name); }
       return true;
     } else {
       const db = await openDB();
