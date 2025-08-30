@@ -67,3 +67,6 @@ main{max-width:980px;margin:0 auto;padding:20px}
 .folder.drop{outline:2px dashed var(--accent); background:#0b73f610}
 .folder .actions{display:flex;gap:4px}
 .content{min-width:0}
+
+/* Toggle buttons */
+.btn.toggle[aria-pressed="true"]{background:linear-gradient(180deg, #0b73f6, #085ad4); color:#fff; border-color:transparent}

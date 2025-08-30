@@ -34,6 +34,11 @@ async function boot() {
   let sortKey = settings.sortKey || 'addedAt';
   let sortDir = settings.sortDir || 'desc';
   let currentFolderId = null;
+  // 連続再生用の状態
+  let shuffle = !!settings.shuffle;
+  let repeatAll = !!settings.repeatAll;
+  let stopAfter = !!settings.stopAfterCurrent;
+  let visibleItems = [];
   if (sortKeySel) sortKeySel.value = sortKey;
   if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
 
@@ -52,6 +57,9 @@ async function boot() {
             <option value="1.5">1.5×</option>
             <option value="2">2.0×</option>
           </select>
+          <button class="btn toggle" data-ctl="shuffle" aria-pressed="false" title="シャッフル（フォルダ内）">シャッフル</button>
+          <button class="btn toggle" data-ctl="repeat" aria-pressed="false" title="リピート（フォルダ）">リピート</button>
+          <button class="btn toggle" data-ctl="stopAfter" aria-pressed="false" title="この曲で停止">1曲で停止</button>
         </div>
       `;
       audio = document.createElement('audio');
@@ -62,7 +70,17 @@ async function boot() {
       rateSel.value = String(playbackRate);
       audio.playbackRate = playbackRate;
 
-      playerEl.addEventListener('click', (e)=>{
+      const syncToggleUI = () => {
+        const sh = playerEl.querySelector('[data-ctl="shuffle"]');
+        const rp = playerEl.querySelector('[data-ctl="repeat"]');
+        const sa = playerEl.querySelector('[data-ctl="stopAfter"]');
+        if (sh) sh.setAttribute('aria-pressed', shuffle? 'true' : 'false');
+        if (rp) rp.setAttribute('aria-pressed', repeatAll? 'true' : 'false');
+        if (sa) sa.setAttribute('aria-pressed', stopAfter? 'true' : 'false');
+      };
+      syncToggleUI();
+
+      playerEl.addEventListener('click', async (e)=>{
         const btn = e.target.closest('button[data-ctl]');
         if (!btn) return;
         const act = btn.dataset.ctl;
@@ -71,6 +89,9 @@ async function boot() {
         if (act === 'playPause') {
           if (audio.paused) audio.play().catch(()=>{}); else audio.pause();
         }
+        if (act === 'shuffle') { shuffle = !shuffle; syncToggleUI(); await db.setSettings({ shuffle }); }
+        if (act === 'repeat')  { repeatAll = !repeatAll; syncToggleUI(); await db.setSettings({ repeatAll }); }
+        if (act === 'stopAfter') { stopAfter = !stopAfter; syncToggleUI(); await db.setSettings({ stopAfterCurrent: stopAfter }); }
       });
 
       rateSel.addEventListener('change', async ()=>{
@@ -134,6 +155,7 @@ async function boot() {
       if (!bytes && bytes!==0) return '';
       const mb = bytes/1024/1024; return (mb>=1? mb.toFixed(1)+'MB' : (bytes/1024).toFixed(0)+'KB');
     };
+    visibleItems = items.slice();
     listEl.innerHTML = items.map(item => `
       <li class="card" data-id="${item.id}" draggable="true">
         <div class="card-body" data-action="play-quick">
@@ -210,6 +232,23 @@ async function boot() {
       const st = await db.getPlayStats(id);
       await db.setPlayStats(id, { ...st, lastPositionMs: 0, lastPlayedAt: Date.now() });
       renderList(searchInput.value);
+      if (stopAfter) return;
+      const ids = (visibleItems||[]).map(x => x.id);
+      if (!ids.length) return;
+      let nextId = null;
+      if (shuffle) {
+        const candidates = ids.filter(x => x !== id);
+        if (candidates.length === 0) return;
+        nextId = candidates[Math.floor(Math.random() * candidates.length)];
+      } else {
+        const idx = ids.indexOf(id);
+        if (idx >= 0 && idx + 1 < ids.length) {
+          nextId = ids[idx + 1];
+        } else if (repeatAll && ids.length > 0) {
+          nextId = ids[0];
+        }
+      }
+      if (nextId) await loadTrackById(nextId, true);
     };
 
     audio.onerror = () => {

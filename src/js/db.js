@@ -70,7 +70,15 @@ export const db = {
     return withStore('playStats', 'readwrite', s => s.delete(trackId));
   },
   async getSettings(){
-    const def = { id: 'singleton', playbackRate: 1.0, sortKey: 'addedAt', sortDir: 'desc' };
+    const def = {
+      id: 'singleton',
+      playbackRate: 1.0,
+      sortKey: 'addedAt',
+      sortDir: 'desc',
+      shuffle: false,
+      repeatAll: false,
+      stopAfterCurrent: false,
+    };
     const val = await withStore('settings', 'readonly', s => new Promise((res, rej)=>{
       const r = s.get('singleton'); r.onsuccess=()=>res(r.result||def); r.onerror=()=>rej(r.error);
     }));
