@@ -2,8 +2,10 @@
 import { openDB } from './db.js';
 
 const supportsOPFS = !!(navigator.storage && navigator.storage.getDirectory);
-const CHUNK_SIZE = 8 * 1024 * 1024; // 8MiB
+const CHUNK_SIZE = 8 * 1024 * 1024; // 8MiB - チャンクサイズ（分割保存の単位）
 const CHUNK_THRESHOLD = 32 * 1024 * 1024; // 32MiB 以上は分割保存（IndexedDB）
+// 注: OPFS使用時はストリーミング処理により無制限のファイルサイズに対応
+// IndexedDB使用時もチャンク分割により大容量ファイルを安全に保存可能
 
 function sanitize(name){
   return String(name || 'unnamed').replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_').slice(0, 255);

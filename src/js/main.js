@@ -628,8 +628,9 @@ async function boot() {
 
   fileInput.addEventListener('change', async () => {
     const files = Array.from(fileInput.files || []);
-    const MAX_BYTES = 200 * 1024 * 1024; // 200MB
-    let warned = false;
+    // ファイルサイズ制限を削除し、無制限で取り込み可能に
+    // const MAX_BYTES = 200 * 1024 * 1024; // 200MB
+    // let warned = false;
 
     const isWavType = (t) => /^audio\/(wav|x-wav|wave|vnd\.wave)$/i.test(String(t||''));
     const isWavName = (n) => /\.wav$/i.test(String(n||''));
@@ -648,10 +649,11 @@ async function boot() {
       let ok = isWavType(f.type) || isWavName(f.name);
       if (!ok) ok = await sniffWav(f);
       if (!ok) { toast(`${f.name} はWAVとして認識できませんでした。`); continue; }
-      if (f.size > MAX_BYTES) {
-        if (!warned) { alert('200MBを超えるファイルは取り込み対象外です。'); warned = true; }
-        continue;
-      }
+      // ファイルサイズ制限チェックを削除
+      // if (f.size > MAX_BYTES) {
+      //   if (!warned) { alert('200MBを超えるファイルは取り込み対象外です。'); warned = true; }
+      //   continue;
+      // }
       try {
         if (navigator.storage?.estimate) {
           const { quota=0, usage=0 } = await navigator.storage.estimate();
