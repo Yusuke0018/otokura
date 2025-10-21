@@ -2,7 +2,7 @@
 const v = new URL(import.meta.url).searchParams.get('v') || '0';
 
 async function boot() {
-  const [{ renderShell, toast, showError, promptModal, folderPickerModal }, { storage }, { db }, metricsMod] = await Promise.all([
+  const [{ renderShell, toast, showError, showSuccess, promptModal, folderPickerModal }, { storage }, { db }, metricsMod] = await Promise.all([
     import(`./ui.js?v=${v}`),
     import(`./storage.js?v=${v}`),
     import(`./db.js?v=${v}`),
@@ -47,7 +47,10 @@ async function boot() {
   let orderMap = settings.manualOrder || {};
   const folderKey = () => (currentFolderId || 'root');
   if (sortKeySel) sortKeySel.value = sortKey;
-  if (sortDirBtn) sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
+  if (sortDirBtn) {
+    const icon = sortDirBtn.querySelector('#sortDirIcon');
+    if (icon) icon.textContent = (sortDir==='desc'?'⬇️':'⬆️');
+  }
   const syncReorderToggle = () => { if (reorderToggleBtn) reorderToggleBtn.setAttribute('aria-pressed', (sortKey==='manual')?'true':'false'); };
   syncReorderToggle();
   let reorderPrevSortKey = (sortKey==='manual') ? 'addedAt' : sortKey;
@@ -186,8 +189,15 @@ async function boot() {
       const mb = bytes/1024/1024; return (mb>=1? mb.toFixed(1)+'MB' : (bytes/1024).toFixed(0)+'KB');
     };
     visibleItems = items.slice();
+
+    // ドロップゾーンの表示/非表示
+    const dropZone = document.getElementById('dropZone');
+    if (dropZone) {
+      dropZone.style.display = items.length === 0 ? 'block' : 'none';
+    }
+
     listEl.innerHTML = items.map(item => `
-      <li class="card" data-id="${item.id}" draggable="true">
+      <li class="card${currentId === item.id ? ' playing' : ''}" data-id="${item.id}" draggable="true">
         <div class="card-body" data-action="play-quick">
           <div class="card-title">${item.name}</div>
           <div class="card-sub">
@@ -197,9 +207,9 @@ async function boot() {
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn icon on-mobile" data-action="rename" aria-label="ファイル名変更">✎</button>
-          <button class="btn icon on-mobile" data-action="delete" aria-label="削除">🗑</button>
-          <button class="btn icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
+          <button class="btn btn-icon on-mobile" data-action="rename" aria-label="ファイル名変更">✎</button>
+          <button class="btn btn-icon on-mobile" data-action="delete" aria-label="削除">🗑</button>
+          <button class="btn btn-icon kebab" data-menu="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="メニュー">⋯</button>
           <div class="menu" role="menu">
             <button class="menu-item" data-action="play">再生</button>
             <button class="menu-item" data-action="playNext">次に再生</button>
@@ -698,7 +708,8 @@ async function boot() {
   });
   if (sortDirBtn) sortDirBtn.addEventListener('click', async ()=>{
     sortDir = (sortDir==='desc') ? 'asc' : 'desc';
-    sortDirBtn.textContent = (sortDir==='desc'?'降順':'昇順');
+    const icon = sortDirBtn.querySelector('#sortDirIcon');
+    if (icon) icon.textContent = (sortDir==='desc'?'⬇️':'⬆️');
     await db.setSettings({ sortDir });
     renderList(searchInput.value);
   });
